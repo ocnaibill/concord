@@ -8,69 +8,93 @@
     "start:react": "vite",
     "start:electron": "wait-on http://localhost:5173 && electron client/main.js",
     "dev": "concurrently \"npm:start:server\" \"npm:start:react\" \"npm:start:electron\"",
-
     "build:react": "vite build",
     "dist:mac": "npm run build:react && electron-builder --mac",
     "dist:win": "npm run build:react && electron-builder --win",
     "dist:linux": "npm run build:react && electron-builder --linux",
-    "dist:all": "npm run build:react && electron-builder --mac --win --linux" 
+    "dist:all": "npm run build:react && electron-builder --mac --win --linux"
   },
   "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ocnaibill/concord.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ocnaibill/concord/issues"
+  },
+  "homepage": "https://github.com/ocnaibill/concord#readme",
+  "description": "",
   "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "electron": "^38.2.1",
+    "electron-builder": "^26.0.12",
+    "nodemon": "^3.1.10",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "vite": "^7.1.12",
+    "wait-on": "^9.0.1"
   },
-
   "build": {
     "appId": "com.seuamigo.concord",
     "productName": "Concord",
-    
     "files": [
-    "client/**/*"
+      "client/**/*"
     ],
-    
     "directories": {
       "buildResources": "build_assets"
     },
-
     "mac": {
       "target": [
         {
-          "target": "dmg", 
-          "arch": ["x64", "arm64"] 
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.social-networking",
-      "icon": "build_assets/icon.icns" 
+      "icon": "build_assets/icon.icns"
     },
-
     "win": {
       "target": [
         {
-          "target": "nsis", 
-          "arch": ["x64", "arm64"]
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
-      "icon": "build_assets/icon.ico" 
+      "icon": "build_assets/icon.ico"
     },
-
     "linux": {
       "target": [
         {
-          "target": "AppImage", 
-          "arch": ["x64", "arm64"] 
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         },
         {
-          "target": "deb", 
-          "arch": ["x64", "arm64"]
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "Network;Chat",
-      "icon": "build_assets/icon.png" 
+      "icon": "build_assets/icon.png"
     }
   }
 }
