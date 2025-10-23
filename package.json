@@ -1,10 +1,10 @@
 {
   "name": "concord",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "main.js",
   "type": "module",
   "scripts": {
-  "start:server": "nodemon server/index.js",
+  "start:server": "nodemon server/main.js",
   "start:react": "vite",
   "start:electron": "wait-on http://localhost:5173 && electron client/main.js",
   "dev": "concurrently \"npm:start:server\" \"npm:start:react\" \"npm:start:electron\""
