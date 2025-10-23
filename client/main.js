@@ -46,7 +46,7 @@ function createWindow() {
         tcpSocket = new net.Socket();
         
         // Tenta se conectar ao servidor TCP.
-        tcpSocket.connect(65432, '127.0.0.1', () => {
+        tcpSocket.connect(3000, '127.0.0.1', () => {
             console.log('Conexão TCP estabelecida com o servidor!');
             // Envia uma mensagem para o React informando que a conexão foi bem-sucedida.
             win.webContents.send('tcp-status', { connected: true });
