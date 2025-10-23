@@ -41,17 +41,43 @@ export class Lobby extends ChannelHandler {
         this.rooms = new Map()
     }
 
+
+    broadcastRoomListUpdate() {
+        const rooms = this.listRooms();
+        const payload = { type: 'room-list-update', rooms: rooms };
+
+        // 1. Envia para todos os usuários no lobby
+        this.users.forEach(user => {
+            user.respond('broadcast', payload);
+        });
+        
+        // 2. Envia para CADA SALA (worker)
+        this.rooms.forEach(room => {
+            room.port.postMessage({
+                msg: 'lobby-broadcast', // O RoomWorker vai ouvir isso
+                payload: payload         // Envia o mesmo payload
+            });
+        });
+    }
+
+
     createRoom(user, roomName) {
+        const newRoomId = this.#roomIdAccumulator;
         const room = {
-            id: this.#roomIdAccumulator,
+            id: newRoomId, 
             name: roomName,
-            port: new Worker('./server/workers/RoomWorker.js')
+            port: new Worker('./server/workers/RoomWorker.js'),
+            userCount: 1 
         }
 
         user.port.removeAllListeners('message')
         room.port.postMessage({
             msg: 'opened',
-            payload: { creator: user, roomName: room.name }
+            payload: { 
+                creator: user, 
+                roomName: room.name, 
+                roomId: newRoomId 
+            }
         }, [user.port])
 
         room.port.on('message', ({ msg, payload }) => {
@@ -68,15 +94,22 @@ export class Lobby extends ChannelHandler {
                 room.port.terminate()
                 this.rooms.delete(room.id)
 
-                this.broadcastMessage(null, 'removed-room', `A sala ${room.name} foi removida`)
+                this.broadcastRoomListUpdate();
+            }
+            if (msg === 'count-update') {
+                const { count } = payload;
+                room.userCount = count; 
+                this.broadcastRoomListUpdate();
             }
         })
 
-        this.broadcastMessage(null, 'created-room', `A sala ${room.name} foi criada`)
+       
 
         this.removeUser(user.id)
-        this.rooms.set(this.#roomIdAccumulator, room)
+        this.rooms.set(newRoomId, room)
         this.#roomIdAccumulator++
+
+         this.broadcastRoomListUpdate();
     }
 
     joinUserInRoom(user, roomId) {
@@ -95,6 +128,10 @@ export class Lobby extends ChannelHandler {
     }
     
     listRooms() {
-        return [...this.rooms.values()].map(room => ({ id: room.id, name: room.name }))
+        return [...this.rooms.values()].map(room => ({ 
+            id: room.id, 
+            name: room.name, 
+            userCount: room.userCount 
+        }))
     }
 }

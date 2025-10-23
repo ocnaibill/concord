@@ -4,6 +4,8 @@ export class Room extends ChannelHandler {
     constructor(port) {
         super(port)
 
+        this.id = null;
+
         this.commands = {
             'message': ({ user, message }) => {
                 this.broadcastMessage(user, 'message', message)
@@ -41,7 +43,25 @@ export class Room extends ChannelHandler {
         newUser.nickname = user.nickname
         
         this.broadcastMessage(null, 'user-joined', `${user.nickname} entrou na sala.`)
+
+        this.port.postMessage({
+            msg: 'count-update',
+            payload: { roomId: this.id, count: this.users.size }
+        });
+
         return newUser
+    }
+
+    removeUser(user) { 
+        const deleted = super.removeUser(user.id); // Chama o 'removeUser' do ChannelHandler
+        
+        if (deleted) {
+            this.port.postMessage({
+                msg: 'count-update',
+                payload: { roomId: this.id, count: this.users.size }
+            });
+        }
+        return deleted;
     }
 
     changeUserNickname(user, newNickname) {
@@ -53,7 +73,7 @@ export class Room extends ChannelHandler {
 
     leaveUser(user) {
         this.port.postMessage({msg: 'leaved', payload: user}, [user.port])
-        this.removeUser(user.id)
+        this.removeUser(user)
 
         this.broadcastMessage(null, 'user-leaved', `${user.nickname} saiu da sala.`)
         

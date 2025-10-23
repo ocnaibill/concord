@@ -6,8 +6,9 @@ let room = new Room(parentPort)
 room.port.on('message', ({ msg, payload }) => {
     
     if(msg === 'opened') {
-        const { creator, roomName } = payload
+        const { creator, roomName, roomId } = payload
         room.name = roomName
+        room.id = roomId
         console.log(`[${room.name}] Criada por ${creator.nickname}`)
         
         const newUser = room.addUser(creator)
@@ -23,5 +24,13 @@ room.port.on('message', ({ msg, payload }) => {
         newUser.respond('success', {
             msg: `Você entrou na sala ${room.name}.`
         })
+    }
+
+    else if(msg === 'lobby-broadcast') {
+        // 'payload' é { type: 'room-list-update', rooms: [...] }
+        // Retransmite o payload para todos os usuários nesta sala
+        room.users.forEach(user => {
+            user.respond('broadcast', payload);
+        });
     }
 })
