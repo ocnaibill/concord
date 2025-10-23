@@ -87,7 +87,16 @@ function App() {
           } else if (packet.status === 'success') {
             
             // --- LÓGICA DE SUCESSO ATUALIZADA ---
-            if (packet.body.newNick) {
+            if (packet.body.msg === messageRef.current) {
+              newMessages.push({
+                sender: 'Você', // Mostra como "Você"
+                text: packet.body.msg,
+                time: timestamp
+              });
+              setMessage(''); // Limpa o input
+            }
+
+            else if (packet.body.newNick) {
               // O comando 'nick' foi um sucesso
               setUserName(packet.body.newNick); // Define o nome de usuário
               setStatusMessage(`Conectado como ${packet.body.newNick}.`); // Atualiza status global

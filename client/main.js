@@ -4,12 +4,11 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import net from 'net';
-import { fileURLToPath } from 'url'; 
-
-
+import { fileURLToPath } from 'url';
 // Recria as variáveis __dirname e __filename para Módulos ES
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const isPackaged = app.isPackaged;
 
 // Variável para armazenar a instância do socket TCP.
 let tcpSocket = null;
@@ -24,15 +23,33 @@ function createWindow() {
             // __dirname aponta para o diretório do arquivo atual (client/)
             // path.join é usado para criar um caminho de arquivo seguro e multiplataforma.
             // preload.js será a ponte entre este processo (Node.js) e o processo de renderização (React).
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js'),
+            webSecurity: false
         }
     });
 
     // Carrega o arquivo HTML principal na janela.
-    win.loadURL('http://localhost:5173');
+    if (isPackaged) {
+            // --- MODO PRODUÇÃO - CORREÇÃO FINAL ---
+            // Agora, 'dist' está NO MESMO NÍVEL que 'main.js'.
+            // __dirname é .../app.asar/client
+            // O caminho é .../app.asar/client/dist/index.html
+            const appIndexPath = path.join(__dirname, 'dist', 'index.html');
+            
+            win.loadFile(appIndexPath);
 
-    // Abre as Ferramentas de Desenvolvedor (DevTools), útil para depuração.
-    win.webContents.openDevTools();
+            // (Descomente para depurar se a tela branca persistir)
+            //win.webContents.openDevTools(); 
+
+    } else {
+        // --- MODO DESENVOLVIMENTO ---
+        // Carrega a URL do servidor Vite.
+        win.loadURL('http://localhost:5173');
+
+        // Abre as Ferramentas de Desenvolvedor (DevTools), útil para depuração.
+        win.webContents.openDevTools();
+    }
+
 
     // --- LÓGICA DE COMUNICAÇÃO TCP ---
 
