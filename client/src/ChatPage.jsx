@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import ChatSidebar from './components/ChatSidebar.jsx';
 import InfoBackground from './components/InfoBackground.jsx';
 import SettingsIcon from './assets/config-icon.png';
@@ -7,6 +7,7 @@ import ChatMessage from './components/ChatMessage.jsx';
 import PopupNome from './components/PopUpNome.jsx';
 import PopupErro from './components/PopUpErro.jsx';
 import PopupCriarSala from './components/PopupCriarSala.jsx';
+// Não precisamos importar o PopupConfirm aqui, pois ele está no App.jsx
 
 function ChatPage({
   setCurrentPage,
@@ -18,59 +19,46 @@ function ChatPage({
   handleConnect,
   handleSendMessage,
   
-  // Props de Popups
+  // Popups
   isNicknamePopupOpen,
   handleSetNickname,
   isErrorPopupOpen,
   setIsErrorPopupOpen,
   errorMessage,
-  
-  // --- NOVAS PROPS VINDAS DO APP ---
-  rooms,
-  currentRoomId,
-  handleJoinRoom,
   isCreateRoomPopupOpen,
   setIsCreateRoomPopupOpen,
   handleCreateRoom,
   
-  // (Exemplo)
+  // Props da Sidebar
+  rooms,
+  currentRoomId,
+  handleJoinRoom,
   handleLeaveRoom,
   isInRoom
 }) {
+  
   const chatAreaRef = useRef(null);
 
-  // O estado de 'userName' e dos popups foi movido para o App.jsx
-
-
-  // Rola para o final do chat quando novas mensagens chegam
   useEffect(() => {
     if (chatAreaRef.current) {
       chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
-  // Função interna do popup para chamar o handler do App
-  const handleConfirmNickname = (name) => {
-    handleSetNickname(name); // Chama a função do App.jsx
-  };
-
   return (
     <div className="flex h-full gap-6 p-6" style={{ backgroundColor: '#242323' }}>
       
-      {/* PopupNome é controlado pelo App.jsx */}
+      {/* Popups */}
       <PopupNome
         isOpen={isNicknamePopupOpen}
-        onClose={() => {}} // Não permitimos fechar sem um nome
-        onConfirm={handleConfirmNickname}
+        onClose={() => {}}
+        onConfirm={handleSetNickname}
       />
-
-      {/* PopupErro é controlado pelo App.jsx */}
       <PopupErro
         isOpen={isErrorPopupOpen}
         onClose={() => setIsErrorPopupOpen(false)}
-        message={errorMessage || "Ocorreu um erro desconhecido."} // Passa a msg de erro
+        message={errorMessage || "Ocorreu um erro desconhecido."}
       />
-{/* --- NOVO POPUP RENDERIZADO --- */}
       <PopupCriarSala
         isOpen={isCreateRoomPopupOpen}
         onClose={() => setIsCreateRoomPopupOpen(false)}
@@ -79,15 +67,20 @@ function ChatPage({
 
       {/* --- SIDEBAR CONECTADA --- */}
       <ChatSidebar
-        chats={rooms} // Passa as salas reais
-        selectedId={currentRoomId} // Passa o ID da sala atual
-        onSelect={handleJoinRoom} // Conecta o clique ao handler de entrar
-        onAdd={() => setIsCreateRoomPopupOpen(true)} // Conecta o '+' ao popup
+        chats={rooms}
+        selectedId={currentRoomId}
+        onSelect={handleJoinRoom}
+        onAdd={() => setIsCreateRoomPopupOpen(true)}
+        
+        // --- (Request 1 & 4) ---
+        isInRoom={isInRoom}
+        onLeave={handleLeaveRoom}
       />
       
       <InfoBackground className="flex-1">
         <div className="flex flex-col h-full p-4">
           <header className="flex justify-between items-center mb-4">
+            {/* ... (Header h1, p, button) ... */}
             <div>
               <h1 className="text-3xl font-bold text-gray-400">Concord</h1>
               <p className="text-gray-400">{statusMessage}</p>
@@ -101,7 +94,7 @@ function ChatPage({
             </button>
           </header>
 
-          {/* Botão de Conectar. Ele só aparece se NÃO estivermos conectados */}
+          {/* Botão de Conectar (sem mudanças) */}
           {!isConnected && (
             <div className="mb-4">
               <button
@@ -112,9 +105,10 @@ function ChatPage({
               </button>
             </div>
           )}
+          
+          {/* --- (Request 1) Botão "Sair da Sala" REMOVIDO daqui --- */}
 
-          {/* Botão de Testar Erro removido (era só para teste) */}
-
+          {/* Área do Chat (sem mudanças) */}
           <div className="flex-grow relative bg-[#353333] overflow-hidden rounded-xl">
             <div className="absolute inset-0 bg-imagemchat bg-repeat invert opacity-20"></div>
             <div
@@ -149,25 +143,22 @@ function ChatPage({
                   background-color: #888;
                 }
               `}</style>
-  <div className="absolute bottom-[26px] left-[35px] right-[35px]">
+ <div className="absolute bottom-[26px] left-[35px] right-[35px]">
                 <form onSubmit={handleSendMessage} className="relative flex items-center">
                   <input
                     type="text"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    // --- PLACEHOLDER ATUALIZADO ---
                     placeholder={
                       !isConnected ? 'Conecte-se para enviar mensagens' :
                       isInRoom ? 'Digite sua mensagem...' :
-                      'Entre em uma sala para conversar'
+                      'Crie ou entre em uma sala para conversar' // <-- Texto atualizado
                     }
-                    // Desabilita se não estiver em uma sala
                     disabled={!isConnected || isNicknamePopupOpen || !isInRoom} 
                     className="flex-grow w-full bg-[#404040] text-white rounded-[50px] p-4 pr-[70px] focus:outline-none focus:ring-2 focus:ring-cyan-500 custom-placeholder"
                   />
                   <button
                     type="submit"
-                    // Desabilita se não estiver em uma sala
                     disabled={!isConnected || isNicknamePopupOpen || !isInRoom}
                     className="absolute right-[14px] w-[42px] h-[42px] bg-white rounded-full flex items-center justify-center transition-transform duration-200 hover:scale-110 active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100"
                   >
