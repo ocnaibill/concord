@@ -45,7 +45,7 @@ export class Lobby extends ChannelHandler {
         const room = {
             id: this.#roomIdAccumulator,
             name: roomName,
-            port: new Worker('./workers/RoomWorker.js')
+            port: new Worker('./server/workers/RoomWorker.js')
         }
 
         user.port.removeAllListeners('message')
