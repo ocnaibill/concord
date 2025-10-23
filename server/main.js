@@ -1,7 +1,7 @@
 import { Worker, MessageChannel } from 'node:worker_threads';
 import net from 'net';
 
-let lobby = new Worker('./workers/LobbyWorker.js')
+let lobby = new Worker('./server/workers/LobbyWorker.js')
 
 const server = net.createServer((socket) => {
     const { port1, port2 } = new MessageChannel()
@@ -16,7 +16,21 @@ const server = net.createServer((socket) => {
     })
 
     // Redireciona envio e resposta de mensagens do cliente
-    socket.on('data', (packet) => port1.postMessage(JSON.parse(packet)))
+    socket.on('data', (packet) => {
+    // Decodifica o buffer para string (assumindo UTF-8)
+    const packetString = packet.toString('utf-8');
+
+    // O cliente pode enviar múltiplos pacotes de uma vez, separados por '\n'
+    packetString.split('\n').forEach(str => {
+        if (str) { // Ignora linhas em branco
+            try {
+                port1.postMessage(JSON.parse(str));
+            } catch (e) {
+                console.error('[MAIN] Erro ao parsear JSON do cliente:', str, e);
+            }
+        }
+    });
+});
     port1.on('message', packet => socket.write(JSON.stringify(packet)+'\n'))
     console.log('[MAIN] Conexão estabelecida.')
 });
