@@ -8,15 +8,6 @@ export class Room extends Channel {
         this.id = id;
         this.manager = manager;
         
-        this.setupCommands();
-    }
-
-    addUser(user) {
-        super.addUser(user);
-        this.broadcast('user-joined', `${user.nickname} entrou na sala.`);
-    }
-
-    setupCommands() {
         this.commands = {
             'message': ({ user, message }) => {
                 this.broadcast('message', message, user.id);
@@ -52,5 +43,10 @@ export class Room extends Channel {
                 user.respond('success', { users: userManager.listAll() });
             },
         };
+    }
+
+    addUser(user) {
+        super.addUser(user);
+        this.broadcast('user-joined', `${user.nickname} entrou na sala.`);
     }
 }
