@@ -1,40 +1,60 @@
-import { Worker, MessageChannel } from 'node:worker_threads';
-import net from 'net';
+import { WebSocketServer } from 'ws';
+import { User } from './core/User.js';
+import { lobbyInstance } from './entities/Lobby.js';
+import { userManager } from './managers/UserManager.js';
 
-let lobby = new Worker('./server/workers/LobbyWorker.js')
+const wss = new WebSocketServer({ port: 3000 });
 
-const server = net.createServer((socket) => {
-    const { port1, port2 } = new MessageChannel()
+console.log('[SERVER] WebSocket rodando na porta 3000');
 
-    // Transfere uma porta de comunicacao a Thread do lobby
-    console.log('[MAIN] Iniciando nova conexão...')
-    lobby.postMessage({msg: 'connect', payload: port2}, [port2])
+wss.on('connection', (ws, req) => {
+    const user = new User(ws, req);
+    userManager.addUser(user); 
 
-    // Informa caso haja a desconexao repentina do usuario
-    socket.on('close', () => {
-        port1.postMessage({command: 'disconnect', payload: null })
-    })
+    console.log(`[CONNECTION] Nova conexão: ${user.nickname}`);
+    
+    lobbyInstance.addUser(user);
+    user.respond('connected', { msg: 'Bem-vindo ao Chat WebSocket!', userId: user.id });
 
-    // Redireciona envio e resposta de mensagens do cliente
-    socket.on('data', (packet) => {
-    // Decodifica o buffer para string (assumindo UTF-8)
-    const packetString = packet.toString('utf-8');
+    ws.on('message', (rawMessage) => {
+        try {
+            const packet = JSON.parse(rawMessage);
+            const { command, payload } = packet;
 
-    // O cliente pode enviar múltiplos pacotes de uma vez, separados por '\n'
-    packetString.split('\n').forEach(str => {
-        if (str) { // Ignora linhas em branco
-            try {
-                port1.postMessage(JSON.parse(str));
-            } catch (e) {
-                console.error('[MAIN] Erro ao parsear JSON do cliente:', str, e);
+            // Pega o canal atual do usuário (Lobby ou alguma Sala)
+            const channel = user.currentChannel;
+
+            if (channel) {
+                channel.handleMessage(user, command, payload || {});
+            } else {
+                // Caso raro onde usuário ficou órfão
+                lobbyInstance.addUser(user);
+                user.respond('error', { msg: 'Estado recuperado. Você voltou ao lobby.' });
+            }
+
+        } catch (err) {
+            console.error('Pacote inválido:', err.message);
+            user.respond('error', { msg: 'JSON inválido' });
+        }
+    });
+
+    ws.on('close', () => {
+        console.log(`[DISCONNECT] ${user.nickname} saiu.`);
+
+        userManager.removeUser(user.id);
+        if (user.currentChannel) {
+            // Chama lógica de saída (broadcasts, destruição de sala, etc)
+            // Se for Lobby, apenas remove. Se for Sala, pode disparar 'leave'.
+            if (user.currentChannel.commands['leave']) {
+                // Simula comando de leave para limpar
+                 try {
+                    user.currentChannel.commands['leave']({ user });
+                 } catch(e) {} 
+            } else {
+                user.currentChannel.removeUser(user.id);
             }
         }
     });
-});
-    port1.on('message', packet => socket.write(JSON.stringify(packet)+'\n'))
-    console.log('[MAIN] Conexão estabelecida.')
-});
-
-server.listen(3000, () => {
-    console.log('[MAIN] Servidor escutando na porta 3000');
+    
+    ws.on('error', console.error);
 });
