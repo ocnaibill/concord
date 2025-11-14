@@ -1,84 +1,56 @@
-import { ChannelHandler } from './interfaces/ChannelHandler.js';
+import { Channel } from '../core/Channel.js';
+import { lobbyInstance } from '../entities/Lobby.js';
+import { userManager } from '../managers/UserManager.js';
 
-export class Room extends ChannelHandler {
-    constructor(port) {
-        super(port)
-
-        this.id = null;
-
-        this.commands = {
-            'message': ({ user, message }) => {
-                this.broadcastMessage(user, 'message', message)
-
-                user.respond('success', {
-                    msg: message
-                })
-            },
-            'leave': ({ user }) => {
-                this.leaveUser(user)
-            },
-            'nick': ({ user, nickname }) => {
-                this.changeUserNickname(user, nickname)
-            },
-            'list': ({ user, entity }) => {
-                if (entity === 'users') {
-                    user.respond('success', {
-                        users: this.listUsers()
-                    })
-                }
-                else {
-                    user.respond('error', { msg: 'Entidade não reconhecida' })
-                }
-            },
-            'disconnect': ({ user }) => {
-                user.port.close()
-                this.removeUser(user)
-                this.broadcastMessage(null, 'client-disconnected', `${user.nickname} se desconectou.`)
-            },
-        }
+export class Room extends Channel {
+    constructor(id, name, manager) {
+        super(name);
+        this.id = id;
+        this.manager = manager;
+        
+        this.setupCommands();
     }
 
     addUser(user) {
-        const newUser = super.addUser(user.port)
-        newUser.nickname = user.nickname
-        
-        this.broadcastMessage(null, 'user-joined', `${user.nickname} entrou na sala.`)
-
-        this.port.postMessage({
-            msg: 'count-update',
-            payload: { roomId: this.id, count: this.users.size }
-        });
-
-        return newUser
+        super.addUser(user);
+        this.broadcast('user-joined', `${user.nickname} entrou na sala.`);
     }
 
-    removeUser(user) { 
-        const deleted = super.removeUser(user.id); // Chama o 'removeUser' do ChannelHandler
-        
-        if (deleted) {
-            this.port.postMessage({
-                msg: 'count-update',
-                payload: { roomId: this.id, count: this.users.size }
-            });
-        }
-        return deleted;
-    }
-
-    changeUserNickname(user, newNickname) {
-        const oldNick = user.nickname
-        super.changeUserNickname(user, newNickname)
-
-        this.broadcastMessage(null, 'nick-change', `${oldNick} alterou seu apelido para ${user.nickname}`)
-    }
-
-    leaveUser(user) {
-        this.port.postMessage({msg: 'leaved', payload: user}, [user.port])
-        this.removeUser(user)
-
-        this.broadcastMessage(null, 'user-leaved', `${user.nickname} saiu da sala.`)
-        
-        if (this.users.size === 0) {
-            this.port.postMessage({msg: 'closed', payload: null})
-        }
+    setupCommands() {
+        this.commands = {
+            'message': ({ user, message }) => {
+                this.broadcast('message', message, user.id);
+                user.respond('success', { msg: message });
+            },
+            'leave': ({ user }) => {
+                this.removeUser(user.id);
+                lobbyInstance.addUser(user)
+                user.send('leaved', { msg: 'Você saiu da sala.' });
+                
+                this.broadcast('user-leaved', `${user.nickname} saiu.`);
+                
+                if (this.users.size === 0) {
+                    this.manager.removeRoom(this.id);
+                    console.log(`Sala ${this.name} removida.`);
+                }
+            },
+            'nick': ({ user, nickname }) => {
+                const old = user.nickname;
+                user.nickname = nickname;
+                user.respond('success', { oldNick: old, newNick: nickname });
+                this.broadcast('nick-change', `${old} agora é ${nickname}.`, user.id);
+            },
+            'list': ({ user, entity }) => {
+                if (entity === 'users') {
+                    const userList = Array.from(this.users.values()).map(u => ({ id: u.id, nick: u.nickname }));
+                    user.respond('success', { users: userList });
+                } else {
+                    user.respond('error', { msg: 'Entidade não reconhecida (apenas "users" é válido aqui)' });
+                }
+            },
+            'list_all_users': ({ user }) => {
+                user.respond('success', { users: userManager.listAll() });
+            },
+        };
     }
 }
