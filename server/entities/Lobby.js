@@ -1,137 +1,59 @@
-import { Worker } from 'node:worker_threads';
-import { ChannelHandler } from './interfaces/ChannelHandler.js';
+import { Channel } from '../core/Channel.js';
+import { roomManager } from '../managers/RoomManager.js';
+import { userManager } from '../managers/UserManager.js';
 
-export class Lobby extends ChannelHandler {
-    #roomIdAccumulator = 0
-
-    constructor(commPort) {
-        super(commPort)
-
+export class Lobby extends Channel {
+    constructor() {
+        super('Lobby');
+        
         this.commands = {
             'create': ({ user, roomName }) => {
-                this.createRoom(user, roomName)
+                try {
+                    const room = roomManager.createRoom(roomName, user);
+                    this.moveUserToRoom(user, room);
+                } catch (e) {
+                    user.respond('error', { msg: e.message });
+                }
             },
             'join': ({ user, roomId }) => {
-                this.joinUserInRoom(user, roomId)
-            },
-            'nick': ({ user, nickname }) => {
-                this.changeUserNickname(user, nickname)
+                const room = roomManager.getRoom(roomId);
+                if (!room) return user.respond('error', { msg: 'Sala não encontrada' });
+                
+                try {
+                    this.moveUserToRoom(user, room);
+                } catch (e) {
+                    user.respond('error', { msg: e.message });
+                }
             },
             'list': ({ user, entity }) => {
-                if (entity === 'users') {
-                    user.respond('success', {
-                        users: this.listUsers()
-                    })
-                }
-                else if (entity === 'rooms') {
-                    user.respond('success', {
-                        rooms: this.listRooms()
-                    })
-                }
-                else {
-                    user.respond('error', { msg: 'Entidade não reconhecida' })
+                if (entity === 'rooms') {
+                    user.respond('success', { rooms: roomManager.listRooms() });
+                } else if (entity === 'users') {
+                    const userList = Array.from(this.users.values()).map(u => ({ id: u.id, nick: u.nickname }));
+                    user.respond('success', { users: userList });
                 }
             },
-            'disconnect': ({ user }) => {
-                user.port.close()
-                this.removeUser(user)
+            'list_all_users': ({ user }) => {
+                user.respond('success', { users: userManager.listAll() });
             },
-        }
+            'nick': ({ user, nickname }) => {
+                const old = user.nickname;
+                user.nickname = nickname;
+                user.respond('success', { oldNick: old, newNick: nickname });
+            },
 
-        this.rooms = new Map()
+        };
     }
 
-
-    broadcastRoomListUpdate() {
-        const rooms = this.listRooms();
-        const payload = { type: 'room-list-update', rooms: rooms };
-
-        // 1. Envia para todos os usuários no lobby
-        this.users.forEach(user => {
-            user.respond('broadcast', payload);
-        });
+    moveUserToRoom(user, room) {
+        this.removeUser(user.id);
+        room.addUser(user);
         
-        // 2. Envia para CADA SALA (worker)
-        this.rooms.forEach(room => {
-            room.port.postMessage({
-                msg: 'lobby-broadcast', // O RoomWorker vai ouvir isso
-                payload: payload         // Envia o mesmo payload
-            });
+        user.respond('success', { 
+            roomName: room.name, 
+            roomId: room.id 
         });
-    }
-
-
-    createRoom(user, roomName) {
-        const newRoomId = this.#roomIdAccumulator;
-        const room = {
-            id: newRoomId, 
-            name: roomName,
-            port: new Worker('./server/workers/RoomWorker.js'),
-            userCount: 1 
-        }
-
-        user.port.removeAllListeners('message')
-        room.port.postMessage({
-            msg: 'opened',
-            payload: { 
-                creator: user, 
-                roomName: room.name, 
-                roomId: newRoomId 
-            }
-        }, [user.port])
-
-        room.port.on('message', ({ msg, payload }) => {
-            if (msg === 'leaved') {
-                const user = payload
-
-                console.log(`[LOBBY] ${user.nickname} saiu da sala ${room.name}.`)
-                const connected = this.addUser(user.port)
-                connected.nickname = user.nickname
-                connected.respond('success', { msg: 'Você retornou ao lobby.' })
-            }
-            if (msg === 'closed') {
-                console.log(`[LOBBY] A sala ${room.name} foi removida.`)
-                room.port.terminate()
-                this.rooms.delete(room.id)
-
-                this.broadcastRoomListUpdate();
-            }
-            if (msg === 'count-update') {
-                const { count } = payload;
-                room.userCount = count; 
-                this.broadcastRoomListUpdate();
-            }
-        })
-
-       
-
-        this.removeUser(user.id)
-        this.rooms.set(newRoomId, room)
-        this.#roomIdAccumulator++
-
-         this.broadcastRoomListUpdate();
-    }
-
-    joinUserInRoom(user, roomId) {
-        const room = this.rooms.get(roomId);
-
-        if (!room) {
-            user.respond('error', { msg: 'Sala não encontrada' })
-        }
-        
-        room.port.postMessage({
-            msg: 'joined',
-            payload: { user }
-        }, [user.port])
-
-        this.removeUser(user.id)
-    }
-    
-    listRooms() {
-        return [...this.rooms.values()].map(room => ({ 
-            id: room.id, 
-            name: room.name, 
-            userCount: room.userCount 
-        }))
     }
 }
+
+export const lobbyInstance = new Lobby();
