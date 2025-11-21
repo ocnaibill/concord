@@ -9,25 +9,42 @@ console.log('[SERVER] WebSocket rodando na porta 3000');
 
 wss.on('connection', (ws, req) => {
     const user = new User(ws, req);
-    userManager.addUser(user); 
 
+//Verifica se o nickname está disponível    
+    if (!userManager.isNicknameAvailable(user.nickname)) {
+        ws.send(JSON.stringify({
+            status: "error",
+            msg: `O nickname ${user.nickname} já está em uso.`
+        }));
+        ws.close();
+        return;
+    }
+
+    // Registra o usuário
+    try {
+        userManager.addUser(user);
+    } catch (err) {
+        ws.send(JSON.stringify({ status: "error", msg: err.message }));
+        ws.close();
+        return;
+    }
+//  Nova conexão
     console.log(`[CONNECTION] Nova conexão: ${user.nickname}`);
     
     lobbyInstance.addUser(user);
     user.respond('connected', { msg: 'Bem-vindo ao Chat WebSocket!', userId: user.id });
 
+    // Segue normalmente com o recebimento de mensagens
     ws.on('message', (rawMessage) => {
         try {
             const packet = JSON.parse(rawMessage);
             const { command, payload } = packet;
 
-            // Pega o canal atual do usuário (Lobby ou alguma Sala)
             const channel = user.currentChannel;
 
             if (channel) {
                 channel.handleMessage(user, command, payload || {});
             } else {
-                // Caso raro onde usuário ficou órfão
                 lobbyInstance.addUser(user);
                 user.respond('error', { msg: 'Estado recuperado. Você voltou ao lobby.' });
             }
@@ -38,23 +55,25 @@ wss.on('connection', (ws, req) => {
         }
     });
 
+    
     ws.on('close', () => {
         console.log(`[DISCONNECT] ${user.nickname} saiu.`);
 
         userManager.removeUser(user.id);
+
         if (user.currentChannel) {
             // Chama lógica de saída (broadcasts, destruição de sala, etc)
             // Se for Lobby, apenas remove. Se for Sala, pode disparar 'leave'.
             if (user.currentChannel.commands['leave']) {
                 // Simula comando de leave para limpar
-                 try {
+                try {
                     user.currentChannel.commands['leave']({ user });
-                 } catch(e) {} 
+                } catch(e) {} 
             } else {
                 user.currentChannel.removeUser(user.id);
             }
         }
     });
-    
+
     ws.on('error', console.error);
 });
