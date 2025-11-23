@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import peopleIcon from "../assets/people.svg";
+import globeIcon from "../assets/globe.svg";
 
 // Ícone minimalista de "+"
 function PlusIcon({ className = "w-5 h-5" }) {
@@ -18,7 +19,6 @@ function PlusIcon({ className = "w-5 h-5" }) {
     </svg>
   );
 }
-
 
 function LeaveIcon({ className = "w-5 h-5" }) {
   return (
@@ -78,13 +78,21 @@ const ChatSidebar = ({
   onSelect,
   onAdd,
 
-  // --- (Request 1 & 4) Novas props ---
+  // --- Props existentes ---
   isInRoom,
   onLeave,
-}) => {
-  const hasChats = chats && chats.length > 0;
 
-  const items = useMemo(
+  // --- NOVAS PROPS DO APP.JSX (DMs) ---
+  sidebarMode = 'rooms', // 'rooms' ou 'users'
+  onToggleSidebar,       // Função para trocar
+  onlineUsers = [],      // Lista de usuários
+  onSelectUser,          // Função ao clicar no usuário
+  dmHistory = {},        // Histórico de msg
+  currentDmUserId        // ID selecionado na DM
+}) => {
+  
+  // Memo para formatar SALAS (Modo Rooms)
+  const roomItems = useMemo(
     () =>
       (chats || []).map((c) => ({
         id: c.id,
@@ -95,26 +103,55 @@ const ChatSidebar = ({
     [chats]
   );
 
-  
+  // Memo para formatar USUÁRIOS (Modo Users)
+  // Reutilizamos a estrutura de dados para aproveitar o mesmo layout do botão
+  const userItems = useMemo(
+    () => 
+      (onlineUsers || []).map((u) => {
+         const history = dmHistory[u.id] || [];
+         const hasHistory = history.length > 0;
+         return {
+            id: u.id,
+            title: u.nick,
+            // Mostra a última mensagem ou um texto padrão
+            preview: hasHistory ? history[history.length - 1].text : "Clique para conversar",
+            isUser: true // Flag para saber que é usuário
+         };
+      }),
+    [onlineUsers, dmHistory]
+  );
+
+  // Define qual lista mostrar baseado no modo
+  const itemsToShow = sidebarMode === 'rooms' ? roomItems : userItems;
+  const hasItems = itemsToShow && itemsToShow.length > 0;
+
+  // Lógica do botão Toggle
+  const isRoomsMode = sidebarMode === 'rooms';
+  const toggleButtonText = isRoomsMode ? "Mensagens Diretas" : "Conversas Públicas";
+  const ToggleIcon = isRoomsMode ? peopleIcon : globeIcon;
+
   return (
     <aside className="relative flex h-full w-72 min-w-64 flex-col overflow-hidden rounded-[28px] bg-neutral-900 text-slate-100 ring-1 ring-white/10">
       <TopographyOverlay opacity={0.2} />
 
-      {/* Botão de Mensagens Diretas */}
+      {/* Botão Alternador (Toggle) */}
       <button
+        onClick={onToggleSidebar}
         className="relative z-10 mt-[22px] ml-[13px] flex h-[32px] w-[calc(100%-25px)] items-center justify-center gap-2 rounded-[25px] bg-[#676767] text-[20px] font-bold text-white transition hover:bg-[#5a5a5a]"
         style={{ fontFamily: '"Istok Web Bold", sans-serif' }}
       >
-        <span>Mensagens Diretas</span>
-        <img src={peopleIcon} alt="" className="h-6 w-6" />
+        <span>{toggleButtonText}</span>
+        <img src={ToggleIcon} alt="" className="h-6 w-6" />
       </button>
 
-      {/* --- HEADER (Request 4) --- */}
+      {/* --- HEADER --- */}
       <div className="relative z-10 flex items-center justify-between px-5 py-4 border-b border-white/15">
-        <h2 className="text-3xl font-extrabold tracking-tight">Chats</h2>
+        <h2 className="text-3xl font-extrabold tracking-tight">
+             {isRoomsMode ? "Chats" : "Online"}
+        </h2>
 
-        {/* Mostra o botão "+" apenas se NÃO estiver em uma sala (ou seja, no lobby) */}
-        {!isInRoom && (
+        {/* Mostra o botão "+" apenas se estiver no modo SALAS e NÃO estiver em uma sala */}
+        {isRoomsMode && !isInRoom && (
           <button
             type="button"
             onClick={onAdd}
@@ -126,30 +163,56 @@ const ChatSidebar = ({
         )}
       </div>
 
-      {/* Lista de Chats (Scroll) */}
+      {/* Lista de Chats ou Usuários (Scroll) */}
       <div className="relative z-10 flex-1 space-y-2 overflow-y-auto p-2">
-        {!hasChats && (
-          <div className="px-3 py-2 text-sm text-slate-400">Nenhuma sala pública disponível :( Crie uma!</div>
+        {!hasItems && (
+          <div className="px-3 py-2 text-sm text-slate-400">
+             {isRoomsMode 
+                ? "Nenhuma sala pública disponível :( Crie uma!" 
+                : "Ninguém online no momento."}
+          </div>
         )}
-        {items.map((item) => {
-          const active = String(item.id) === String(selectedId);
+
+        {itemsToShow.map((item) => {
+          // Lógica de seleção
+          // Se for sala: compara com selectedId
+          // Se for usuário: compara com currentDmUserId
+          const isSelected = item.isUser 
+                ? String(item.id) === String(currentDmUserId)
+                : String(item.id) === String(selectedId);
+          
           return (
             <button
               key={item.id}
-              onClick={() => onSelect?.(item.id)}
-              className={`group block w-full rounded-xl px-3 py-3 text-left transition ${active ? "bg-white/10 ring-1 ring-white/20" : "hover:bg-white/5"
-                }`}
+              onClick={() => {
+                  if (item.isUser) {
+                      // Se for usuário, chama onSelectUser passando o objeto original user
+                      // Precisamos achar o objeto original na lista onlineUsers
+                      const originalUser = onlineUsers.find(u => u.id === item.id);
+                      if (originalUser) onSelectUser(originalUser);
+                  } else {
+                      // Se for sala, chama onSelect normal
+                      onSelect?.(item.id);
+                  }
+              }}
+              className={`group block w-full rounded-xl px-3 py-3 text-left transition ${
+                  isSelected ? "bg-white/10 ring-1 ring-white/20" : "hover:bg-white/5"
+              }`}
             >
               {/* 1. Adiciona um wrapper flexível */}
               <div className="flex justify-between items-center">
 
-                {/* 2. Título */}
-                <div className="truncate text-[15px] font-semibold text-slate-100">
+                {/* 2. Título (Nome da Sala ou Nick do Usuário) */}
+                <div className="truncate text-[15px] font-semibold text-slate-100 flex items-center gap-2">
+                  {/* Se for usuário, mostra bolinha de status online antes do nome */}
+                  {item.isUser && (
+                      <div className="w-2.5 h-2.5 bg-[#00ff5eff] rounded-full shadow-[0_0_5px_rgba(0,255,94,0.6)]"></div>
+                  )}
                   {item.title}
                 </div>
 
-                {/* 3. Contagem de Usuários (só aparece se > 0) */}
-                {item.usersCount > 0 && (
+                {/* 3. Contagem de Usuários (APENAS PARA SALAS e se > 0) */}
+                {!item.isUser && item.usersCount > 0 && (
                   <div className="flex-shrink-0 ml-2">
                     <div
                       style={{
@@ -183,17 +246,21 @@ const ChatSidebar = ({
                   </div>
                 )}
               </div>
+              
+              {/* Preview da última mensagem (Sala ou DM) */}
               {item.preview ? (
-                <div className="mt-0.5 truncate text-xs text-slate-400">{item.preview}</div>
+                <div className="mt-0.5 truncate text-xs text-slate-400 pl-0.5">
+                    {item.preview}
+                </div>
               ) : null}
             </button>
           );
         })}
       </div>
 
-      {/* --- FOOTER (Request 1) --- */}
-      {/* Mostra o botão "Sair" apenas SE estiver em uma sala */}
-      {isInRoom && (
+      {/* --- FOOTER --- */}
+      {/* Mostra o botão "Sair" apenas SE estiver em uma sala E no modo Salas */}
+      {isInRoom && isRoomsMode && (
         <div className="relative z-10 p-2 border-t border-white/15">
           <button
             onClick={onLeave}
@@ -207,7 +274,6 @@ const ChatSidebar = ({
     </aside>
   );
 };
-
 
 export default ChatSidebar;
 export { ChatSidebar };
