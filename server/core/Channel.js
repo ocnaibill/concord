@@ -1,3 +1,5 @@
+import { userManager } from "../managers/UserManager.js";
+
 export class Channel {
     constructor(name) {
         this.name = name;
@@ -46,5 +48,36 @@ export class Channel {
         } else {
             user.respond('error', { msg: 'Comando não reconhecido neste canal.' });
         }
+    }
+
+    sendDM(user, targetId, message) {
+        const target = userManager.getUser(targetId)
+
+        if (!target) {
+            return user.respond('error', { msg: 'Usuário não encontrado ou offline.' })
+        }
+
+        target.send('dm', {
+            senderId: user.id,
+            sender: user.nickname,
+            message: message,
+            timestamp: new Date().toISOString()
+        })
+
+        user.respond('success', { msg: `Mensagem enviada para ${target.nickname}.`})
+    }
+
+    performSignal(user, targetId, signalData) {
+        const target = userManager.getUser(targetId)
+
+        if(!target) {
+            return user.respond('error', { msg: 'Usuário alvo da chamada não encontrado.' })
+        }
+
+        target.send('signal', {
+            senderId: user.id,
+            sender: user.nickname,
+            signalData: signalData
+        })
     }
 }
