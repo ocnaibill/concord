@@ -57,14 +57,17 @@ export class Channel {
             return user.respond('error', { msg: 'Usuário não encontrado ou offline.' })
         }
 
-        target.send('dm', {
+        target.send('direct-message', {
             senderId: user.id,
-            sender: user.nickname,
+            senderNick: user.nickname,
             message: message,
             timestamp: new Date().toISOString()
         })
 
-        user.respond('success', { msg: `Mensagem enviada para ${target.nickname}.`})
+        user.respond('success-dm', {
+            targetId: targetId,
+            message: message
+        })
     }
 
     performSignal(user, targetId, signalData) {

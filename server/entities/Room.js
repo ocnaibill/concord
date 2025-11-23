@@ -7,6 +7,7 @@ export class Room extends Channel {
         super(name);
         this.id = id;
         this.manager = manager;
+        this.MAX_USERS = 5;
         
         this.commands = {
             'message': ({ user, message }) => {
@@ -56,6 +57,10 @@ export class Room extends Channel {
     }
 
     addUser(user) {
+        if (this.users.size >= this.MAX_USERS) {
+            throw new Error(`A sala ${this.name} está cheia.`)
+        }
+
         super.addUser(user);
         this.broadcast('user-joined', `${user.nickname} entrou na sala.`);
     }
