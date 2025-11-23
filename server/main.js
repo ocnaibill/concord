@@ -21,6 +21,18 @@ wss.on('connection', (ws, req) => {
             const packet = JSON.parse(rawMessage);
             const { command, payload } = packet;
 
+            if (command === 'signal') {
+                if (userManager.getUser(targetId)) {
+                    ws.send(JSON.stringify({
+                        command: 'signal',
+                        payload: {
+                            targetId,
+                            signalData: payload.signalData
+                        }
+                    }));
+                }
+            }
+            // No seu servidor WebSocket (Node.js)
             // Pega o canal atual do usuário (Lobby ou alguma Sala)
             const channel = user.currentChannel;
 
