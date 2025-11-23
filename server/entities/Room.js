@@ -1,6 +1,14 @@
 import { Channel } from '../core/Channel.js';
 import { lobbyInstance } from '../entities/Lobby.js';
 import { userManager } from '../managers/UserManager.js';
+import { roomManager } from '../managers/RoomManager.js';
+
+const broadcastGlobalRoomList = () => {
+    const rooms = roomManager.listRooms();
+    const payload = { type: 'room-list-update', rooms };
+    // Envia para TODOS os usuários conectados no servidor (Lobby e Salas)
+    userManager.users.forEach(u => u.send('broadcast', payload));
+};
 
 export class Room extends Channel {
     constructor(id, name, manager) {
@@ -17,7 +25,7 @@ export class Room extends Channel {
             'leave': ({ user }) => {
                 this.removeUser(user.id);
                 lobbyInstance.addUser(user)
-                user.send('leaved', { msg: 'Você saiu da sala.' });
+                user.send('success', { msg: 'Você retornou ao lobby.' });
                 
                 this.broadcast('user-leaved', `${user.nickname} saiu.`);
                 
@@ -25,6 +33,8 @@ export class Room extends Channel {
                     this.manager.removeRoom(this.id);
                     console.log(`Sala ${this.name} removida.`);
                 }
+                // AVISA GERAL QUE O NÚMERO MUDOU (OU SALA SUMIU)
+                broadcastGlobalRoomList();
             },
             'nick': ({ user, nickname }) => {
                 if (userManager.isNicknameTaken(nickname)) {
@@ -63,5 +73,7 @@ export class Room extends Channel {
 
         super.addUser(user);
         this.broadcast('user-joined', `${user.nickname} entrou na sala.`);
+        // AVISA GERAL QUE O NÚMERO MUDOU (OU SALA SUMIU)
+        broadcastGlobalRoomList();
     }
 }

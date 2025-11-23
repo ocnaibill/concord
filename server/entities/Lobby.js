@@ -2,6 +2,12 @@ import { Channel } from '../core/Channel.js';
 import { roomManager } from '../managers/RoomManager.js';
 import { userManager } from '../managers/UserManager.js';
 
+const broadcastGlobalRoomList = () => {
+    const rooms = roomManager.listRooms();
+    const payload = { type: 'room-list-update', rooms };
+    userManager.users.forEach(u => u.send('broadcast', payload));
+};
+
 export class Lobby extends Channel {
     constructor() {
         super('Lobby');
@@ -11,6 +17,7 @@ export class Lobby extends Channel {
                 try {
                     const room = roomManager.createRoom(roomName, user);
                     this.moveUserToRoom(user, room);
+                    broadcastGlobalRoomList();
                 } catch (e) {
                     user.respond('error', { msg: e.message });
                 }

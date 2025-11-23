@@ -16,8 +16,20 @@ function App() {
   const [nickChangeStatus, setNickChangeStatus] = useState({ status: 'idle', message: '' });
   const nickCommandFromSettings = useRef(false);
 
+  // --- NOVOS ESTADOS PARA DM E SIDEBAR ---
+  const [sidebarMode, setSidebarMode] = useState('rooms'); // 'rooms' ou 'users'
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [currentDmUser, setCurrentDmUser] = useState(null); // Usuário atual da DM
+  
+  // Histórico de DMs persistente (Carrega do localStorage ao iniciar)
+  const [dmHistory, setDmHistory] = useState(() => {
+    const saved = localStorage.getItem('chat_dms');
+    return saved ? JSON.parse(saved) : {}; 
+  });
+  // ----------------------------------------
+
   const [rooms, setRooms] = useState([]);
-  const [chatContext, setChatContext] = useState('lobby'); // 'lobby' ou 'room'
+  const [chatContext, setChatContext] = useState('lobby'); // 'lobby', 'room' ou 'dm'
   const [currentRoom, setCurrentRoom] = useState(null);
   const [isVideoCallOpen, setIsVideoCallOpen] = useState(false);
 
@@ -35,7 +47,7 @@ function App() {
     onConfirm: () => { },
   });
 
-  // Ref para "fila de ações" ---
+  // Ref para "fila de ações"
   const nextActionRef = useRef(null);
 
   const messageRef = useRef(message);
@@ -43,45 +55,37 @@ function App() {
     messageRef.current = message;
   }, [message]);
 
-
   const userNameRef = useRef(userName);
   useEffect(() => {
     userNameRef.current = userName;
   }, [userName]);
 
+  // --- EFEITO PARA SALVAR O CACHE DE DMs ---
+  useEffect(() => {
+    localStorage.setItem('chat_dms', JSON.stringify(dmHistory));
+  }, [dmHistory]);
 
   // Função de Envio de Pacote
-  // Removemos a checagem 'if (isConnected)' daqui.
-  // A checagem será feita nos handlers (ex: handleCreateRoom)
-  // Isso evita que o listener 'onTcpData' tenha um 'sendPacket' com estado stale.
   const sendPacket = (command, payload = {}) => {
     const packet = { command, payload };
     socketService.send(JSON.stringify(packet));
   };
 
-  // --- (Request 2) useEffect CORRIGIDO ---
-  // Dependência [ ] vazia é CRUCIAL. Roda SÓ UMA VEZ.
+  // --- useEffect PRINCIPAL (Listeners) ---
   useEffect(() => {
 
-    // Listener para DADOS recebidos
     const handleData = (data) => {
       const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      // O socketService já envia a mensagem crua, mas pode vir múltiplas se fosse TCP puro.
-      // Como é WebSocket, geralmente vem frames completos, mas vamos manter a robustez se necessário.
-      // No caso do WebSocket, 'data' é a mensagem.
 
       try {
         const packet = JSON.parse(data);
 
         if (packet.status === 'error') {
-          // --- LÓGICA DE ERRO ATUALIZADA ---
-          // Se o erro foi causado por uma tentativa da SettingsPage...
+          // --- LÓGICA DE ERRO ---
           if (nickCommandFromSettings.current) {
-            // ...envia o erro para o estado do toast, em vez do popup global
             setNickChangeStatus({ status: 'error', message: packet.body.msg });
-            nickCommandFromSettings.current = false; // Reseta a flag
+            nickCommandFromSettings.current = false; 
           } else {
-            // Senão, é um erro global (join, list, etc.)
             console.error('Erro do Servidor:', packet.body.msg);
             setErrorMessage(packet.body.msg);
             setIsErrorPopupOpen(true);
@@ -89,96 +93,127 @@ function App() {
 
         } else if (packet.status === 'success') {
 
-          // --- LÓGICA DE SUCESSO ATUALIZADA ---
+          // --- 1. Feedback de mensagem enviada (Lobby/Sala) ---
           if (packet.body.msg === messageRef.current) {
             setChatMessages(prev => [...prev, {
-              sender: 'Você', // Mostra como "Você"
+              sender: 'Você', 
               text: packet.body.msg,
               time: timestamp
             }]);
-            setMessage(''); // Limpa o input
+            setMessage(''); 
           }
 
+          // --- 2. Alteração de Nickname ---
           else if (packet.body.newNick) {
-            // O comando 'nick' foi um sucesso
-            setUserName(packet.body.newNick); // Define o nome de usuário
-            setStatusMessage(`Conectado como ${packet.body.newNick}.`); // Atualiza status global
+            setUserName(packet.body.newNick);
+            setStatusMessage(`Conectado como ${packet.body.newNick}.`);
 
-            // Se foi a SettingsPage que pediu...
             if (nickCommandFromSettings.current) {
-              // ...envia a mensagem de sucesso para o estado do toast
               setNickChangeStatus({ status: 'success', message: `Nickname alterado para ${packet.body.newNick}!` });
-              nickCommandFromSettings.current = false; // Reseta a flag
+              nickCommandFromSettings.current = false; 
             }
           }
 
-          // 1. Sucesso ao pedir a lista de salas
+          // --- 3. Recebimento da lista de salas ---
           if (packet.body.rooms) {
             setRooms(packet.body.rooms);
-            if (currentRoom?.id === 'temp_id') {
-              const foundRoom = packet.body.rooms.find(r => r.name === currentRoom.name);
+            if (currentRoom) {
+              const foundRoom = packet.body.rooms.find(r => r.id === currentRoom.id);
               if (foundRoom) setCurrentRoom(foundRoom);
             }
           }
+          
+          // --- 4. [NOVO] Recebimento da lista de usuários online ---
+          if (packet.body.users) {
+             // Filtra para não mostrar a si mesmo na lista
+            const myName = userNameRef.current;
+             const others = packet.body.users.filter(u => u.nick !== myName);
+             setOnlineUsers(others);
+          }
 
-          // ... (lógica de criar/entrar sala)
-          if (packet.body.msg && packet.body.msg.startsWith('Você criou a sala')) {
-            const roomName = packet.body.msg.replace('Você criou a sala ', '').replace('.', '');
+          // --- 5. Entrar ou Criar Sala (Lógica Unificada) ---
+          if (packet.body.roomName && packet.body.roomId !== undefined) {
+            const { roomName, roomId } = packet.body;
 
-            // 1. Cria o objeto da nova sala
-            const newRoom = { id: 'temp_id', name: roomName };
-
-            // 2. Atualiza o estado da lista de salas (para a sidebar)
-            setRooms(prevRooms => [...prevRooms, newRoom]);
-
-            // 3. Define o contexto e a sala atual
             setChatContext('room');
-            setCurrentRoom(newRoom);
+            
+            // Define usersCount: 1 manualmente para feedback instantâneo
+            const newRoomObj = { id: roomId, name: roomName, usersCount: 1 };
+            setCurrentRoom(newRoomObj);
 
             setStatusMessage(`Conectado à sala: ${roomName}`);
             setChatMessages([]);
 
-            // 4. REMOVIDO: sendPacket('list', { entity: 'rooms' });
-          }
-          // --- *** FIM DA CORREÇÃO *** ---
-
-          if (packet.body.msg && packet.body.msg.startsWith('Você entrou na sala')) {
-            const roomName = packet.body.msg.replace('Você entrou na sala ', '').replace('.', '');
-            const joinedRoom = rooms.find(r => r.name === roomName);
-
-            setChatContext('room');
-            setCurrentRoom(joinedRoom || { id: 'unknown', name: roomName });
-            setStatusMessage(`Conectado à sala: ${roomName}`);
-            setChatMessages([]);
+            setRooms(prevRooms => {
+                const exists = prevRooms.some(r => r.id === roomId);
+                if (exists) return prevRooms; 
+                return [...prevRooms, newRoomObj];
+            });
+            // Obs: Não enviamos 'list rooms' aqui para evitar erro de entidade.
           }
 
-          // --- (Request 3) Sucesso ao sair e checagem da "fila de ações" ---
-          if (packet.body.msg === 'Você retornou ao lobby.') {
-            setChatContext('lobby');
-            setCurrentRoom(null);
-            setStatusMessage(`Conectado como ${userNameRef.current}. No Lobby.`);
-            setChatMessages([]);
-
-            // Checa se há uma ação na fila (ex: entrar em outra sala)
-            if (nextActionRef.current) {
-              sendPacket(nextActionRef.current.command, nextActionRef.current.payload);
-              nextActionRef.current = null; // Limpa a fila
-            } else {
-              // Se não houver, apenas atualiza a lista de salas
-              sendPacket('list', { entity: 'rooms' });
+          // --- 6. Retorno ao Lobby ---
+if (packet.body.msg === 'Você retornou ao lobby.') {
+            
+            // Verifica se a saída foi provocada por uma intenção de ir para DM
+            if (nextActionRef.current && nextActionRef.current.type === 'GO_TO_DM') {
+                const targetUser = nextActionRef.current.user;
+                
+                setChatContext('dm');
+                setCurrentDmUser(targetUser);
+                setStatusMessage(`Conversando com ${targetUser.nick}`);
+                setCurrentRoom(null); // Limpa a sala anterior da memória
+                setChatMessages([]);
+                
+                nextActionRef.current = null; // Limpa a ação
+            } 
+            // Verifica se foi provocada por uma intenção de ir para outra SALA
+            else if (nextActionRef.current && nextActionRef.current.command) {
+                setChatContext('lobby');
+                setCurrentRoom(null);
+                setChatMessages([]);
+                sendPacket(nextActionRef.current.command, nextActionRef.current.payload);
+                nextActionRef.current = null;
+            } 
+            // Saída normal (clicou em Sair)
+            else {
+                setChatContext('lobby');
+                setCurrentRoom(null);
+                setStatusMessage(`Conectado como ${userNameRef.current}. No Lobby.`);
+                setChatMessages([]);
+                sendPacket('list', { entity: 'rooms' });
             }
           }
 
-        } else if (packet.status === 'broadcast') {
-
-          // --- GRANDE MUDANÇA AQUI ---
-
-          // 2. Em um 'broadcast' (quando estamos em outra sala)
+        } 
+        // --- [NOVO] CONFIRMAÇÃO DE ENVIO DE DM ---
+        else if (packet.status === 'success-dm') {
+            const { targetId, message } = packet.body;
+            setDmHistory(prev => {
+                const conversation = prev[targetId] || [];
+                return {
+                    ...prev,
+                    [targetId]: [...conversation, { sender: 'Você', text: message, time: timestamp }]
+                };
+            });
+        }
+        // --- [NOVO] RECEBIMENTO DE DM ---
+        else if (packet.status === 'direct-message') {
+            const { senderId, senderNick, message } = packet.body;
+            setDmHistory(prev => {
+                const conversation = prev[senderId] || [];
+                return {
+                    ...prev,
+                    [senderId]: [...conversation, { sender: senderNick, text: message, time: timestamp }]
+                };
+            });
+        }
+        // --- BROADCASTS ---
+        else if (packet.status === 'broadcast') {
           if (packet.body.type === 'room-list-update') {
-            setRooms(packet.body.rooms); // Atualiza a lista de salas DIRETAMENTE
-
-            // Lógica antiga de broadcast de chat
+            setRooms(packet.body.rooms);
           } else {
+            // Mensagens de chat de outros usuários (Sala/Lobby)
             setChatMessages(prev => [...prev, {
               sender: packet.body.sender,
               text: packet.body.message,
@@ -190,21 +225,19 @@ function App() {
       } catch (e) { console.warn('Recebido dado não-JSON:', data, e); }
     };
 
-    // Listener para STATUS da conexão
     const handleStatus = (status) => {
       setIsConnected(status.connected);
       if (status.connected) {
         setStatusMessage('Conectado! Por favor, defina seu nickname.');
         setIsNicknamePopupOpen(true);
       } else {
-        // ... (lógica de desconexão)
         setStatusMessage(status.error ? `Erro: ${status.error}` : 'Desconectado.');
         setUserName(null);
         setIsNicknamePopupOpen(false);
         setRooms([]);
         setChatContext('lobby');
         setCurrentRoom(null);
-        nextActionRef.current = null; // Limpa fila de ações
+        nextActionRef.current = null; 
         if (status.error) {
           setErrorMessage(status.error);
           setIsErrorPopupOpen(true);
@@ -219,9 +252,9 @@ function App() {
       socketService.off('data', handleData);
       socketService.off('status', handleStatus);
     };
-  }, []); // <-- Array VAZIO é crucial!
+  }, []); 
 
-  // --- Handlers de Ação (com checagem de conexão) ---
+  // --- Handlers de Ação ---
 
   const handleConnect = () => {
     if (isConnected) return;
@@ -239,36 +272,36 @@ function App() {
     }
   };
 
+  // --- [ATUALIZADO] Envio de Mensagens (Lobby / Sala / DM) ---
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!message.trim() || !isConnected || !userName) return;
 
     if (chatContext === 'room') {
       sendPacket('message', { message: message });
+    } else if (chatContext === 'dm' && currentDmUser) {
+      // Envio de DM
+      sendPacket('dm', { targetId: currentDmUser.id, message: message });
+      setMessage(''); // Limpa input (o feedback vem no success-dm)
     } else {
-      setErrorMessage('Você precisa estar em uma sala para enviar mensagens.');
+      setErrorMessage('Você precisa estar em uma sala ou conversa privada.');
       setIsErrorPopupOpen(true);
       setMessage('');
     }
   };
 
-
   const handleUpdateNickname = (name) => {
     if (!isConnected) return;
-    if (name.trim() === userName) return; // Não faz nada se for o mesmo nome
+    if (name.trim() === userName) return; 
 
-    // Ativa a flag para o 'onTcpData' saber de onde veio o comando
     nickCommandFromSettings.current = true;
     sendPacket('nick', { nickname: name.trim() });
   };
 
-  // --- NOVA FUNÇÃO (para o Toast fechar) ---
   const resetNickChangeStatus = () => {
     setNickChangeStatus({ status: 'idle', message: '' });
   };
 
-
-  // --- (Request 3) Handler para sair e entrar em seguida ---
   const executeLeaveAndJoin = (roomId) => {
     if (!isConnected) return;
     nextActionRef.current = { command: 'join', payload: { roomId } };
@@ -276,29 +309,35 @@ function App() {
     setIsConfirmPopupOpen(false);
   };
 
-  // --- (Request 3) Handler de "Join" ATUALIZADO ---
   const handleJoinRoom = (roomId) => {
     if (!isConnected) return;
-    if (currentRoom?.id === roomId) return; // Já está na sala
+    
+    if (chatContext === 'room' && currentRoom?.id === roomId) return; 
 
     const roomToJoin = rooms.find(r => r.id === roomId);
-    if (!roomToJoin) return; // Sala não existe mais
+    if (!roomToJoin) return; 
 
     if (chatContext === 'room') {
-      // Abre o popup de confirmação
       setConfirmPopupProps({
         title: 'Mudar de Sala',
         message: `Deseja sair da sala atual e entrar em "${roomToJoin.name}"?`,
         onConfirm: () => executeLeaveAndJoin(roomId),
       });
       setIsConfirmPopupOpen(true);
-    } else {
-      // Se está no lobby, entra direto
-      sendPacket('join', { roomId });
+    } 
+    else {
+
+        if (currentRoom?.id === roomId) {
+             // Apenas restaura a visão
+             setChatContext('room');
+             setStatusMessage(`Conectado à sala: ${roomToJoin.name}`);
+        } else {
+             // Manda o comando para o servidor
+             sendPacket('join', { roomId });
+        }
     }
   };
 
-  // --- (Request 1) Handler para Sair da Sala ---
   const handleLeaveRoom = () => {
     if (!isConnected) return;
     if (chatContext === 'room') {
@@ -306,22 +345,55 @@ function App() {
     }
   };
 
-  // --- (Request 4) Handler para Criar Sala ---
   const handleCreateRoom = (roomName) => {
-    if (!isConnected) return;
-    // Só pode criar se estiver no lobby
-    if (chatContext === 'lobby') {
-      sendPacket('create', { roomName });
-      setIsCreateRoomPopupOpen(false);
+      if (!isConnected) return;
+
+
+      if (chatContext === 'lobby' || chatContext === 'dm') {
+        sendPacket('create', { roomName });
+        setIsCreateRoomPopupOpen(false);
+      } else {
+        setErrorMessage('Você deve sair da sala atual antes de criar uma nova.');
+        setIsErrorPopupOpen(true);
+      }
+  };
+
+  // --- [NOVO] Handlers para Sidebar de Usuários ---
+  const handleToggleSidebar = () => {
+    if (sidebarMode === 'rooms') {
+        setSidebarMode('users');
+        sendPacket('list_all_users'); // Pede lista atualizada
     } else {
-      setErrorMessage('Você deve estar no Lobby para criar uma sala.');
-      setIsErrorPopupOpen(true);
+        setSidebarMode('rooms');
     }
   };
+
+  const handleSelectUser = (userTarget) => {
+      // Se estiver em uma sala, sai dela primeiro
+      if (chatContext === 'room') {
+          // Prepara a "próxima ação" para ser executada quando o servidor confirmar a saída
+          nextActionRef.current = { type: 'GO_TO_DM', user: userTarget };
+          sendPacket('leave');
+      } else {
+          // Se já estiver no Lobby ou em outra DM, troca direto
+          setChatContext('dm');
+          setCurrentDmUser(userTarget);
+          setSidebarMode('users'); // Garante que a sidebar continue na lista
+          setStatusMessage(`Conversando com ${userTarget.nick}`);
+      }
+    };
 
   const renderPage = () => {
     switch (currentPage) {
       case 'chat':
+        // Define quais mensagens mostrar (Sala ou DM)
+        let messagesToDisplay = [];
+        if (chatContext === 'dm' && currentDmUser) {
+            messagesToDisplay = dmHistory[currentDmUser.id] || [];
+        } else {
+            messagesToDisplay = chatMessages;
+        }
+
         return (
           <>
             <ChatPage
@@ -329,7 +401,7 @@ function App() {
               isConnected={isConnected}
               message={message}
               setMessage={setMessage}
-              chatMessages={chatMessages}
+              chatMessages={messagesToDisplay} // Passa lista dinâmica
               statusMessage={statusMessage}
               handleConnect={handleConnect}
               handleSendMessage={handleSendMessage}
@@ -346,14 +418,22 @@ function App() {
               setIsCreateRoomPopupOpen={setIsCreateRoomPopupOpen}
               handleCreateRoom={handleCreateRoom}
 
-              // Props da Sidebar
+              // Props da Sidebar (Atualizadas)
               rooms={rooms}
               currentRoomId={currentRoom?.id}
               handleJoinRoom={handleJoinRoom}
               handleLeaveRoom={handleLeaveRoom}
               isInRoom={chatContext === 'room'}
+              
+              // Novas Props DM
+              sidebarMode={sidebarMode}
+              onToggleSidebar={handleToggleSidebar}
+              onlineUsers={onlineUsers}
+              onSelectUser={handleSelectUser}
+              dmHistory={dmHistory}
+              currentDmUserId={currentDmUser?.id}
             />
-            {/* Renderiza o Popup de Confirmação globalmente */}
+            
             <PopupConfirm
               isOpen={isConfirmPopupOpen}
               onClose={() => setIsConfirmPopupOpen(false)}
