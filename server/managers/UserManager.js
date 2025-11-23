@@ -18,7 +18,7 @@ class UserManager {
     listAll() {
         return Array.from(this.users.values()).map(u => ({ 
             id: u.id, 
-            nickname: u.nickname 
+            nick: u.nickname 
         }));
     }
 }
