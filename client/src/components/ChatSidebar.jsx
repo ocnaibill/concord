@@ -95,6 +95,7 @@ const ChatSidebar = ({
     [chats]
   );
 
+  
   return (
     <aside className="relative flex h-full w-72 min-w-64 flex-col overflow-hidden rounded-[28px] bg-neutral-900 text-slate-100 ring-1 ring-white/10">
       <TopographyOverlay opacity={0.2} />
@@ -149,11 +150,36 @@ const ChatSidebar = ({
 
                 {/* 3. Contagem de Usuários (só aparece se > 0) */}
                 {item.userCount > 0 && (
-                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    <div className="w-[11px] h-[11px] bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs font-medium text-slate-300">
-                      {item.userCount}
-                    </span>
+                  <div className="flex-shrink-0 ml-2">
+                    <div
+                      style={{
+                        width: 50,
+                        height: 25,
+                        backgroundColor: "#727272",
+                        opacity: 0.51,
+                        borderRadius: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        paddingLeft: 8, 
+                        gap: 4, 
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 11,
+                          height: 11,
+                          backgroundColor: "#16a34a", 
+                          borderRadius: "50%",
+                        }}
+                        className="animate-pulse"
+                      />
+                      <span
+                        className="text-xs font-medium text-slate-300"
+                        style={{ lineHeight: "12px" }}
+                      >
+                        {Math.min(item.userCount, 5)}/5
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -181,6 +207,7 @@ const ChatSidebar = ({
     </aside>
   );
 };
+
 
 export default ChatSidebar;
 export { ChatSidebar };
