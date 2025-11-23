@@ -37,11 +37,20 @@ export class Lobby extends Channel {
                 user.respond('success', { users: userManager.listAll() });
             },
             'nick': ({ user, nickname }) => {
+                if (userManager.isNicknameTaken(nickname)) {
+                    return user.respond('error', { msg: 'Este nickname já está em uso.' })
+                }
+
                 const old = user.nickname;
                 user.nickname = nickname;
                 user.respond('success', { oldNick: old, newNick: nickname });
             },
-
+            'dm': ({user, targetId, message}) => {
+                this.sendDM(user, targetId, message)
+            },
+            'signal': ({user, targetId, message}) => {
+                this.performSignal(user, targetId, message)
+            },
         };
     }
 
