@@ -90,7 +90,7 @@ const ChatSidebar = ({
         id: c.id,
         title: c.title || c.name || "Sem título",
         preview: c.preview || "",
-        userCount: c.userCount,
+        usersCount: c.usersCount,
       })),
     [chats]
   );
@@ -149,7 +149,7 @@ const ChatSidebar = ({
                 </div>
 
                 {/* 3. Contagem de Usuários (só aparece se > 0) */}
-                {item.userCount > 0 && (
+                {item.usersCount > 0 && (
                   <div className="flex-shrink-0 ml-2">
                     <div
                       style={{
@@ -157,7 +157,7 @@ const ChatSidebar = ({
                         height: 25,
                         backgroundColor: "#727272",
                         opacity: 0.51,
-                        borderRadius: 6,
+                        borderRadius: 20,
                         display: "flex",
                         alignItems: "center",
                         paddingLeft: 8, 
@@ -168,16 +168,16 @@ const ChatSidebar = ({
                         style={{
                           width: 11,
                           height: 11,
-                          backgroundColor: "#16a34a", 
+                          backgroundColor: "#00ff5eff", 
                           borderRadius: "50%",
                         }}
                         className="animate-pulse"
                       />
                       <span
-                        className="text-xs font-medium text-slate-300"
-                        style={{ lineHeight: "12px" }}
+                        className="text-xs font-bold text-white-500"
+                        style={{ lineHeight: "12px"}}
                       >
-                        {Math.min(item.userCount, 5)}/5
+                        {Math.min(item.usersCount, 5)}/5
                       </span>
                     </div>
                   </div>
