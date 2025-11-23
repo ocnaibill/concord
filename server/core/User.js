@@ -14,7 +14,7 @@ export class User {
         if (this.ws.readyState === 1) { 
             const packet = JSON.stringify({
                 status: type, 
-                ...payload 
+                body: payload
             });
             this.ws.send(packet);
         }
