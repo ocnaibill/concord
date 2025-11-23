@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 // Importe sua instância de socket já existente
-import { socket } from './services/socketService.js';
+import socketService from './services/socketService.js';
 
 const configuration = {
     iceServers: [
@@ -15,8 +15,8 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
 
     // Helper para enviar mensagens apenas se o socket estiver aberto
     const safeSend = (msg) => {
-        if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify(msg));
+        if (socketService.isConnected) {
+            socketService.send(JSON.stringify(msg));
         } else {
             console.warn('WebSocket não está aberto. Mensagem ignorada:', msg);
         }
@@ -121,9 +121,9 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
 
     // 2. Escutar eventos do Socket (Sinalização)
     useEffect(() => {
-        const handleSocketMessage = async (event) => {
+        const handleSocketMessage = async (dataRaw) => {
             try {
-                const data = JSON.parse(event.data);
+                const data = JSON.parse(dataRaw);
 
                 if (!peerConnection.current) return;
 
@@ -161,10 +161,10 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
         };
 
         // Adicione o listener no seu objeto socket real
-        socket.addEventListener('message', handleSocketMessage);
+        socketService.on('data', handleSocketMessage);
 
         return () => {
-            socket.removeEventListener('message', handleSocketMessage);
+            socketService.off('data', handleSocketMessage);
         };
     }, []);
 
