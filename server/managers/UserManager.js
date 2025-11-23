@@ -21,6 +21,13 @@ class UserManager {
             nick: u.nickname 
         }));
     }
+
+    isNicknameTaken(newNickname) {
+        for (const user of this.users.values()) {
+            if (user.nickname === newNickname) return true
+        }
+        return false
+    }
 }
 
 export const userManager = new UserManager();

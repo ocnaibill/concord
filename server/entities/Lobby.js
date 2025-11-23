@@ -34,7 +34,12 @@ export class Lobby extends Channel {
             },
             'list': ({ user, entity }) => {
                 if (entity === 'rooms') {
-                    user.respond('success', { rooms: roomManager.listRooms() });
+                    const roomsData = roomManager.listRooms().map(r => ({
+                        ...r,
+                        maxUsers: 5,
+                        isFull: r.usersCount >= 5
+                    }))
+                    user.respond('success', { rooms: roomsData });
                 } else if (entity === 'users') {
                     const userList = Array.from(this.users.values()).map(u => ({ id: u.id, nick: u.nickname }));
                     user.respond('success', { users: userList });
@@ -44,15 +49,28 @@ export class Lobby extends Channel {
                 user.respond('success', { users: userManager.listAll() });
             },
             'nick': ({ user, nickname }) => {
+                if (userManager.isNicknameTaken(nickname)) {
+                    return user.respond('error', { msg: 'Este nickname já está em uso.' })
+                }
+
                 const old = user.nickname;
                 user.nickname = nickname;
                 user.respond('success', { oldNick: old, newNick: nickname });
             },
-
+            'dm': ({user, targetId, message}) => {
+                this.sendDM(user, targetId, message)
+            },
+            'signal': ({user, targetId, message}) => {
+                this.performSignal(user, targetId, message)
+            },
         };
     }
 
     moveUserToRoom(user, room) {
+        if (room.users.size >= room.MAX_USERS) {
+            throw new Error(`A sala ${room.name} está cheia.`)
+        }
+
         this.removeUser(user.id);
         room.addUser(user);
         

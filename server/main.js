@@ -21,38 +21,6 @@ wss.on('connection', (ws, req) => {
             const packet = JSON.parse(rawMessage);
             const { command, payload } = packet;
 
-            if (command === 'dm') {
-                const { targetId, message } = payload;
-                const targetUser = userManager.getUser(targetId);
-
-                if (targetUser) {
-                    targetUser.send('direct-message', {
-                        senderId: user.id,
-                        senderNick: user.nickname,
-                        message: message
-                    });
-
-                    user.respond('success-dm', {
-                        targetId: targetId,
-                        message: message
-                    });
-                } else {
-                    user.respond('error', { msg: 'Usuário não encontrado ou offline.' });
-                }
-                return; 
-            }
-
-            if (command === 'signal') {
-                if (userManager.getUser(targetId)) {
-                    ws.send(JSON.stringify({
-                        command: 'signal',
-                        payload: {
-                            targetId,
-                            signalData: payload.signalData
-                        }
-                    }));
-                }
-            }
             // No seu servidor WebSocket (Node.js)
             // Pega o canal atual do usuário (Lobby ou alguma Sala)
             const channel = user.currentChannel;

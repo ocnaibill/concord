@@ -15,6 +15,7 @@ export class Room extends Channel {
         super(name);
         this.id = id;
         this.manager = manager;
+        this.MAX_USERS = 5;
         
         this.commands = {
             'message': ({ user, message }) => {
@@ -36,6 +37,10 @@ export class Room extends Channel {
                 broadcastGlobalRoomList();
             },
             'nick': ({ user, nickname }) => {
+                if (userManager.isNicknameTaken(nickname)) {
+                    return user.respond('error', { msg: 'Este nickname já está em uso.' })
+                }
+
                 const old = user.nickname;
                 user.nickname = nickname;
                 user.respond('success', { oldNick: old, newNick: nickname });
@@ -52,10 +57,20 @@ export class Room extends Channel {
             'list_all_users': ({ user }) => {
                 user.respond('success', { users: userManager.listAll() });
             },
+            'dm': ({user, targetId, message}) => {
+                this.sendDM(user, targetId, message)
+            },
+            'signal': ({user, targetId, message}) => {
+                this.performSignal(user, targetId, message)
+            },
         };
     }
 
     addUser(user) {
+        if (this.users.size >= this.MAX_USERS) {
+            throw new Error(`A sala ${this.name} está cheia.`)
+        }
+
         super.addUser(user);
         this.broadcast('user-joined', `${user.nickname} entrou na sala.`);
         // AVISA GERAL QUE O NÚMERO MUDOU (OU SALA SUMIU)

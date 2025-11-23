@@ -16,7 +16,14 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
     // Helper para enviar mensagens apenas se o socket estiver aberto
     const safeSend = (msg) => {
         if (socketService.isConnected) {
-            socketService.send(JSON.stringify(msg));
+            const packet = {
+                command: 'signal',
+                payload: {
+                    targetId: remoteUserId,
+                    signalData: signalData 
+                }
+            };
+            socketService.send(JSON.stringify(packet));
         } else {
             console.warn('WebSocket não está aberto. Mensagem ignorada:', msg);
         }
@@ -82,7 +89,7 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
                             await peerConnection.current.setLocalDescription(offer);
                             safeSend({
                                 type: 'video-offer',
-                                offer: offer,
+                                sdp: offer,
                                 targetSocketId: remoteSocketId
                             });
                         } catch (err) {
@@ -123,7 +130,10 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
     useEffect(() => {
         const handleSocketMessage = async (dataRaw) => {
             try {
-                const data = JSON.parse(dataRaw);
+                const packet = JSON.parse(dataRaw);
+
+                if (packet.status !== 'signal') return;
+                const data = packet.signalData
 
                 if (!peerConnection.current) return;
 
@@ -136,7 +146,7 @@ export const useWebRTC = (remoteSocketId, isInitiator = false) => {
 
                     safeSend({
                         type: 'video-answer',
-                        answer: answer,
+                        sdp: answer,
                         targetSocketId: data.sourceSocketId
                     });
                 }
