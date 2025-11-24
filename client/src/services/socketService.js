@@ -1,5 +1,3 @@
-// client/src/services/socketService.js
-
 class SocketService {
     constructor() {
         this.socket = null;
@@ -7,10 +5,34 @@ class SocketService {
         this.isConnected = false;
     }
 
-    connect(url = 'ws://localhost:3000') {
+    connect() {
         if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
             console.log('WebSocket já está conectado ou conectando.');
             return;
+        }
+
+        let url;
+
+        // 1. Prioridade: Variável de Ambiente (Para Build de Produção do Electron)
+        if (import.meta.env.VITE_WS_URL) {
+            url = import.meta.env.VITE_WS_URL;
+        } 
+        else {
+            // 2. Detecção Automática (Para Web/Navegador ou Dev Local)
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+
+            // Se for localhost ou se for arquivo local (Electron em dev/sem env)
+            const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+            const isFile = protocol === 'file:' || protocol === 'app:';
+
+            if (isLocal || isFile) {
+                url = 'ws://localhost:3000'; // Fallback Local
+            } else {
+                // Produção Web (Homelab via Nginx)
+                const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+                url = `${wsProtocol}//${window.location.host}/ws`;
+            }
         }
 
         console.log(`Conectando ao WebSocket em ${url}...`);
@@ -55,11 +77,8 @@ class SocketService {
         }
     }
 
-    // Gerenciamento de Eventos (Padrão Observer simples)
     on(event, callback) {
-        if (!this.listeners[event]) {
-            this.listeners[event] = [];
-        }
+        if (!this.listeners[event]) this.listeners[event] = [];
         this.listeners[event].push(callback);
     }
 

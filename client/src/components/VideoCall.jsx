@@ -82,7 +82,6 @@ const VideoCall = ({ targetUserId, isCaller }) => {
                 {remoteStream ? (
                     <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                 ) : (
-                    // --- MENSAGEM DE STATUS QUANDO NÃO HÁ VÍDEO ---
                     <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 gap-3 px-6 text-center">
                         <div className="bg-gray-700/50 p-4 rounded-full">
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
