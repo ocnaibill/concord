@@ -1,20 +1,12 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import peopleIcon from "../assets/people.svg";
 import globeIcon from "../assets/globe.svg";
 
-// Ícone minimalista de "+"
+// --- ÍCONES E ASSETS ---
+
 function PlusIcon({ className = "w-5 h-5" }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M12 5v14M5 12h14" />
     </svg>
   );
@@ -22,16 +14,7 @@ function PlusIcon({ className = "w-5 h-5" }) {
 
 function LeaveIcon({ className = "w-5 h-5" }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
       <polyline points="16 17 21 12 16 7"></polyline>
       <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -39,62 +22,181 @@ function LeaveIcon({ className = "w-5 h-5" }) {
   );
 }
 
-// Overlay topográfico
-function TopographyOverlay({ opacity = 0.18 }) {
+// Ícone de Lupa (Search)
+function SearchIcon({ className = "w-5 h-5" }) {
   return (
-    <svg
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 1000 1000"
-      preserveAspectRatio="none"
-      aria-hidden
-      style={{ opacity }}
-    >
-      <defs>
-        <linearGradient id="tg" x1="0" x2="1">
-          <stop offset="0%" stopColor="#5b6572" />
-          <stop offset="100%" stopColor="#3c424a" />
-        </linearGradient>
-      </defs>
-      {[
-        "M-50 120 C 150 60, 350 140, 560 100 S 980 120, 1100 60",
-        "M-50 240 C 160 180, 360 300, 560 240 S 980 260, 1100 180",
-        "M-50 360 C 160 300, 360 420, 560 360 S 980 380, 1100 300",
-        "M-50 480 C 160 420, 360 540, 560 480 S 980 500, 1100 420",
-        "M-50 600 C 160 540, 360 660, 560 600 S 980 620, 1100 540",
-        "M-50 720 C 160 660, 360 780, 560 720 S 980 740, 1100 660",
-        "M-50 840 C 160 780, 360 900, 560 840 S 980 860, 1100 780",
-      ].map((d, i) => (
-        <path key={i} d={d} fill="none" stroke="url(#tg)" strokeWidth="2" />
-      ))}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
     </svg>
   );
 }
 
-// ---- componente em constante + export explícito (default e nomeado)
+// Ícone de Fechar (X)
+function CloseIcon({ className = "w-5 h-5" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  );
+}
+
+function CameraIcon({ isOn, className = "w-6 h-6" }) {
+    if (isOn) {
+        return (
+            <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+                 <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+        );
+    }
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+             <path d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z" />
+        </svg>
+    );
+}
+
+const SignalIcon = ({ quality, className }) => {
+    const bars = [1, 2, 3, 4];
+    const activeBars = quality === 1 ? 4 : quality === 2 ? 3 : 2;
+    const color = quality === 1 ? '#00ff5e' : quality === 2 ? '#ffdd00' : '#ff3b30';
+
+    return (
+        <svg viewBox="0 0 24 24" className={className} style={{ width: 20, height: 20 }}>
+            {bars.map((bar) => (
+                <rect
+                    key={bar}
+                    x={bar * 5}
+                    y={20 - bar * 4}
+                    width={3}
+                    height={bar * 4}
+                    rx={1}
+                    fill={bar <= activeBars ? color : "#4a4a4a"}
+                />
+            ))}
+        </svg>
+    );
+};
+
+// --- COMPONENTE DO PAINEL DE CONEXÃO ---
+const ConnectionStatusPanel = ({ user, onCameraToggle, isVideoEnabled }) => {
+    const [isHoveringPing, setIsHoveringPing] = useState(false);
+    const [seconds, setSeconds] = useState(0);
+
+    const connectionQuality = 1; 
+    const pingMs = 34;
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setSeconds(s => s + 1);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const formatTime = (totalSeconds) => {
+        const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+        const m = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+        const s = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    };
+
+    return (
+        <div className="relative mx-auto" style={{ width: '100%', maxWidth: '269px', height: '85px' }}>
+            
+            <svg style={{ display: 'none' }}>
+                <filter id="noiseFilterPanel">
+                    <feTurbulence type="fractalNoise" baseFrequency="1.3" numOctaves="3" stitchTiles="stitch" />
+                    <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.25 0"/>
+                </filter>
+            </svg>
+
+            {isHoveringPing && (
+                <div 
+                    className="absolute z-50 bg-black/90 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap pointer-events-none border border-white/10 shadow-xl"
+                    style={{ top: '-25px', left: '20px' }}
+                >
+                    {pingMs}ms
+                </div>
+            )}
+
+            <div 
+                className="relative w-full h-full bg-[#2B2929] overflow-hidden shadow-lg"
+                style={{ borderRadius: '33px' }}
+            >
+                <div 
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ backgroundColor: '#524343', opacity: 0.25, filter: 'url(#noiseFilterPanel)' }}
+                />
+
+                <div 
+                    className="absolute z-10 cursor-help flex items-center justify-center"
+                    style={{ top: '10px', left: '27px', width: '20px', height: '20px' }}
+                    onMouseEnter={() => setIsHoveringPing(true)}
+                    onMouseLeave={() => setIsHoveringPing(false)}
+                >
+                    <SignalIcon quality={connectionQuality} />
+                </div>
+
+                <div 
+                    className="absolute z-10 flex items-center"
+                    style={{ top: '10px', left: '51px', height: '20px' }}
+                >
+                    <span className="text-[10px] font-bold text-[#00ff5e] font-sans tracking-wide">
+                        Conectado :D
+                    </span>
+                </div>
+
+                <div 
+                    className="absolute z-10 truncate max-w-[120px]"
+                    style={{ top: '45px', left: '27px' }}
+                >
+                    <span className="text-[13px] font-bold text-white block leading-tight">
+                        {user.nick || user.name || "Usuário"}
+                    </span>
+                </div>
+
+                <div 
+                    className="absolute z-10"
+                    style={{ top: '60px', left: '27px' }}
+                >
+                    <span className="text-[10px] text-gray-400 font-mono">
+                        {formatTime(seconds)} de conexão
+                    </span>
+                </div>
+
+
+            </div>
+        </div>
+    );
+};
+
+
+// --- COMPONENTE PRINCIPAL SIDEBAR ---
+
 const ChatSidebar = ({
   chats = [],
   selectedId = null,
   onSelect,
   onAdd,
-
-  // --- Props existentes ---
   isInRoom,
   onLeave,
-
-  // --- NOVAS PROPS DO APP.JSX (DMs) ---
-  sidebarMode = 'rooms', // 'rooms' ou 'users'
-  onToggleSidebar,       // Função para trocar
-  onlineUsers = [],      // Lista de usuários
-  onSelectUser,          // Função ao clicar no usuário
-  dmHistory = {},        // Histórico de msg
-  currentDmUserId        // ID selecionado na DM
+  sidebarMode = 'rooms',
+  onToggleSidebar,
+  onlineUsers = [],
+  onSelectUser,
+  dmHistory = {},
+  currentDmUserId,
+  onCameraToggle, 
+  isVideoEnabled
 }) => {
   
-  // Memo para formatar SALAS (Modo Rooms)
+  // --- ESTADOS DE BUSCA ---
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
   const roomItems = useMemo(
-    () =>
-      (chats || []).map((c) => ({
+    () => (chats || []).map((c) => ({
         id: c.id,
         title: c.title || c.name || "Sem título",
         preview: c.preview || "",
@@ -103,36 +205,58 @@ const ChatSidebar = ({
     [chats]
   );
 
-  // Memo para formatar USUÁRIOS (Modo Users)
-  // Reutilizamos a estrutura de dados para aproveitar o mesmo layout do botão
   const userItems = useMemo(
-    () => 
-      (onlineUsers || []).map((u) => {
+    () => (onlineUsers || []).map((u) => {
          const history = dmHistory[u.id] || [];
          const hasHistory = history.length > 0;
          return {
             id: u.id,
             title: u.nick,
-            // Mostra a última mensagem ou um texto padrão
             preview: hasHistory ? history[history.length - 1].text : "Clique para conversar",
-            isUser: true // Flag para saber que é usuário
+            isUser: true,
+            originalUser: u 
          };
       }),
     [onlineUsers, dmHistory]
   );
 
-  // Define qual lista mostrar baseado no modo
   const itemsToShow = sidebarMode === 'rooms' ? roomItems : userItems;
-  const hasItems = itemsToShow && itemsToShow.length > 0;
+  
+  // --- FILTRO DE BUSCA ---
+  const filteredItems = useMemo(() => {
+      if (!searchTerm) return itemsToShow;
+      return itemsToShow.filter(item => 
+          item.title.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [itemsToShow, searchTerm]);
 
-  // Lógica do botão Toggle
+  const hasItems = filteredItems && filteredItems.length > 0;
   const isRoomsMode = sidebarMode === 'rooms';
   const toggleButtonText = isRoomsMode ? "Mensagens Diretas" : "Conversas Públicas";
   const ToggleIcon = isRoomsMode ? peopleIcon : globeIcon;
 
+  const selectedUserObj = useMemo(() => {
+      if (!currentDmUserId) return null;
+      return onlineUsers.find(u => u.id === currentDmUserId);
+  }, [currentDmUserId, onlineUsers]);
+
+  // Reseta a busca ao trocar de modo
+  useEffect(() => {
+      setIsSearchOpen(false);
+      setSearchTerm("");
+  }, [sidebarMode]);
+
   return (
     <aside className="relative flex h-full w-72 min-w-64 flex-col overflow-hidden rounded-[28px] bg-neutral-900 text-slate-100 ring-1 ring-white/10">
-      <TopographyOverlay opacity={0.2} />
+      
+      <div className="pointer-events-none absolute inset-0 opacity-[0.2]">
+        <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+             <defs><linearGradient id="tg" x1="0" x2="1"><stop offset="0%" stopColor="#5b6572"/><stop offset="100%" stopColor="#3c424a"/></linearGradient></defs>
+             <path d="M-50 120 C 150 60, 350 140, 560 100 S 980 120, 1100 60" fill="none" stroke="url(#tg)" strokeWidth="2"/>
+             <path d="M-50 240 C 160 180, 360 300, 560 240 S 980 260, 1100 180" fill="none" stroke="url(#tg)" strokeWidth="2"/>
+             <path d="M-50 360 C 160 300, 360 420, 560 360 S 980 380, 1100 300" fill="none" stroke="url(#tg)" strokeWidth="2"/>
+        </svg>
+      </div>
 
       {/* Botão Alternador (Toggle) */}
       <button
@@ -144,39 +268,71 @@ const ChatSidebar = ({
         <img src={ToggleIcon} alt="" className="h-6 w-6" />
       </button>
 
-      {/* --- HEADER --- */}
-      <div className="relative z-10 flex items-center justify-between px-5 py-4 border-b border-white/15">
-        <h2 className="text-3xl font-extrabold tracking-tight">
-             {isRoomsMode ? "Chats" : "Online"}
-        </h2>
+      {/* --- HEADER COM BUSCA --- */}
+      <div className="relative z-10 flex items-center justify-between px-5 py-4 border-b border-white/15 min-h-[70px]">
+        
+        {isSearchOpen ? (
+            // --- MODO DE BUSCA ---
+            <div className="flex items-center w-full gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
+                <SearchIcon className="w-5 h-5 text-gray-400" />
+                <input 
+                    autoFocus
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar..."
+                    className="flex-1 bg-transparent border-none outline-none text-white placeholder-gray-500 text-lg font-medium"
+                />
+                <button 
+                    onClick={() => { setIsSearchOpen(false); setSearchTerm(""); }}
+                    className="text-gray-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition"
+                >
+                    <CloseIcon />
+                </button>
+            </div>
+        ) : (
+            // --- MODO TÍTULO ---
+            <>
+                <div className="flex items-center gap-3 group">
+                    <h2 className="text-3xl font-extrabold tracking-tight">
+                        {isRoomsMode ? "Chats" : "Online"}
+                    </h2>
+                    
+                    {/* Botão de Lupa */}
+                    <button 
+                        onClick={() => setIsSearchOpen(true)}
+                        className="text-gray-500 group-hover:text-white transition-colors duration-200 p-1.5 rounded-full hover:bg-white/5"
+                        title="Buscar"
+                    >
+                        <SearchIcon className="w-5 h-5" />
+                    </button>
+                </div>
 
-        {/* Mostra o botão "+" apenas se estiver no modo SALAS e NÃO estiver em uma sala */}
-        {isRoomsMode && !isInRoom && (
-          <button
-            type="button"
-            onClick={onAdd}
-            aria-label="Novo chat"
-            className="inline-flex items-center justify-center rounded-full border border-white/20 p-1.5 text-slate-200/90 hover:bg-white/10 hover:text-white transition"
-          >
-            <PlusIcon className="w-5 h-5" />
-          </button>
+                {isRoomsMode && !isInRoom && (
+                <button
+                    onClick={onAdd}
+                    className="inline-flex items-center justify-center rounded-full border border-white/20 p-1.5 text-slate-200/90 hover:bg-white/10 hover:text-white transition"
+                >
+                    <PlusIcon className="w-5 h-5" />
+                </button>
+                )}
+            </>
         )}
       </div>
 
-      {/* Lista de Chats ou Usuários (Scroll) */}
+      {/* Lista de Chats ou Usuários */}
       <div className="relative z-10 flex-1 space-y-2 overflow-y-auto p-2">
         {!hasItems && (
-          <div className="px-3 py-2 text-sm text-slate-400">
-             {isRoomsMode 
-                ? "Nenhuma sala pública disponível :( Crie uma!" 
-                : "Ninguém online no momento."}
+          <div className="px-3 py-2 text-sm text-slate-400 text-center mt-4">
+             {searchTerm 
+                ? `Nenhum resultado para "${searchTerm}"`
+                : (isRoomsMode 
+                    ? "Nenhuma sala pública disponível :( Crie uma!" 
+                    : "Ninguém online no momento.")}
           </div>
         )}
 
-        {itemsToShow.map((item) => {
-          // Lógica de seleção
-          // Se for sala: compara com selectedId
-          // Se for usuário: compara com currentDmUserId
+        {filteredItems.map((item) => {
           const isSelected = item.isUser 
                 ? String(item.id) === String(currentDmUserId)
                 : String(item.id) === String(selectedId);
@@ -186,12 +342,9 @@ const ChatSidebar = ({
               key={item.id}
               onClick={() => {
                   if (item.isUser) {
-                      // Se for usuário, chama onSelectUser passando o objeto original user
-                      // Precisamos achar o objeto original na lista onlineUsers
                       const originalUser = onlineUsers.find(u => u.id === item.id);
                       if (originalUser) onSelectUser(originalUser);
                   } else {
-                      // Se for sala, chama onSelect normal
                       onSelect?.(item.id);
                   }
               }}
@@ -199,67 +352,31 @@ const ChatSidebar = ({
                   isSelected ? "bg-white/10 ring-1 ring-white/20" : "hover:bg-white/5"
               }`}
             >
-              {/* 1. Adiciona um wrapper flexível */}
               <div className="flex justify-between items-center">
-
-                {/* 2. Título (Nome da Sala ou Nick do Usuário) */}
                 <div className="truncate text-[15px] font-semibold text-slate-100 flex items-center gap-2">
-                  {/* Se for usuário, mostra bolinha de status online antes do nome */}
                   {item.isUser && (
                       <div className="w-2.5 h-2.5 bg-[#00ff5eff] rounded-full shadow-[0_0_5px_rgba(0,255,94,0.6)]"></div>
                   )}
                   {item.title}
                 </div>
 
-                {/* 3. Contagem de Usuários (APENAS PARA SALAS e se > 0) */}
                 {!item.isUser && item.usersCount > 0 && (
                   <div className="flex-shrink-0 ml-2">
-                    <div
-                      style={{
-                        width: 50,
-                        height: 25,
-                        backgroundColor: "#727272",
-                        opacity: 0.51,
-                        borderRadius: 20,
-                        display: "flex",
-                        alignItems: "center",
-                        paddingLeft: 8, 
-                        gap: 4, 
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 11,
-                          height: 11,
-                          backgroundColor: "#00ff5eff", 
-                          borderRadius: "50%",
-                        }}
-                        className="animate-pulse"
-                      />
-                      <span
-                        className="text-xs font-bold text-white-500"
-                        style={{ lineHeight: "12px"}}
-                      >
-                        {Math.min(item.usersCount, 5)}/5
-                      </span>
+                    <div style={{ width: 50, height: 25, backgroundColor: "#727272", opacity: 0.51, borderRadius: 20, display: "flex", alignItems: "center", paddingLeft: 8, gap: 4 }}>
+                      <div style={{ width: 11, height: 11, backgroundColor: "#00ff5eff", borderRadius: "50%" }} className="animate-pulse" />
+                      <span className="text-xs font-bold text-white-500" style={{ lineHeight: "12px"}}>{Math.min(item.usersCount, 5)}/5</span>
                     </div>
                   </div>
                 )}
               </div>
-              
-              {/* Preview da última mensagem (Sala ou DM) */}
-              {item.preview ? (
-                <div className="mt-0.5 truncate text-xs text-slate-400 pl-0.5">
-                    {item.preview}
-                </div>
-              ) : null}
+              {item.preview ? <div className="mt-0.5 truncate text-xs text-slate-400 pl-0.5">{item.preview}</div> : null}
             </button>
           );
         })}
       </div>
 
       {/* --- FOOTER --- */}
-      {/* Mostra o botão "Sair" apenas SE estiver em uma sala E no modo Salas */}
+      
       {isInRoom && isRoomsMode && (
         <div className="relative z-10 p-2 border-t border-white/15">
           <button
@@ -271,9 +388,19 @@ const ChatSidebar = ({
           </button>
         </div>
       )}
+
+      {!isRoomsMode && selectedUserObj && (
+          <div className="relative z-10 p-4 border-t border-white/5 bg-black/20">
+              <ConnectionStatusPanel 
+                  user={selectedUserObj} 
+                  onCameraToggle={onCameraToggle} 
+                  isVideoEnabled={isVideoEnabled} 
+              />
+          </div>
+      )}
+
     </aside>
   );
 };
 
 export default ChatSidebar;
-export { ChatSidebar };
