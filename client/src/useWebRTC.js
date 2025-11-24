@@ -1,220 +1,197 @@
 import { useEffect, useRef, useState } from 'react';
-// Importe sua instância de socket já existente
 import socketService from './services/socketService.js';
 
 const configuration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' } // Servidor STUN público do Google para resolver IPs
-    ]
+    ] 
 };
 
-export const useWebRTC = (remoteSocketId, isInitiator = false) => {
+export const useWebRTC = (targetUserId, isInitiator = false) => {
     const [localStream, setLocalStream] = useState(null);
     const [remoteStream, setRemoteStream] = useState(null);
     const peerConnection = useRef(null);
+    
+    // Controle de reinício de conexão sem fechar o componente
+    const [restartCount, setRestartCount] = useState(0);
+    const isRestarting = useRef(false);
 
-    // Helper para enviar mensagens apenas se o socket estiver aberto
-    const safeSend = (msg) => {
-        if (socketService.isConnected) {
+    const safeSend = (type, data) => {
+        if (socketService.isConnected && targetUserId) {
             const packet = {
                 command: 'signal',
                 payload: {
-                    targetId: remoteUserId,
-                    signalData: signalData 
+                    targetId: targetUserId,
+                    type: type,
+                    data: data
                 }
             };
             socketService.send(JSON.stringify(packet));
-        } else {
-            console.warn('WebSocket não está aberto. Mensagem ignorada:', msg);
         }
     };
 
-    // 1. Inicializar captura de mídia e conexão
     useEffect(() => {
-        let timeoutId;
+        let isMounted = true;
         let myStream = null;
-        let isCanceled = false;
+        isRestarting.current = false; 
 
         const startConnection = async () => {
+            if (!targetUserId) return;
+
             try {
-                console.log('Solicitando acesso à câmera/microfone...');
+                console.log('📷 Solicitando mídia (Sessão ' + restartCount + ')...');
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 
-                // Se o componente desmontou enquanto aguardava a câmera, limpa tudo e aborta
-                if (isCanceled) {
-                    console.log('Componente desmontado durante solicitação de mídia. Fechando stream.');
+                if (!isMounted) {
                     stream.getTracks().forEach(track => track.stop());
                     return;
                 }
 
-                console.log('Acesso à mídia concedido!', stream);
-                myStream = stream; // Guarda referência local para limpeza
+                console.log('✅ Mídia concedida.');
+                myStream = stream;
                 setLocalStream(stream);
 
-                // Cria a conexão Peer-to-Peer
                 peerConnection.current = new RTCPeerConnection(configuration);
 
-                // Adiciona as faixas de vídeo/áudio do stream local à conexão
                 stream.getTracks().forEach(track => {
-                    if (peerConnection.current) {
-                        peerConnection.current.addTrack(track, stream);
-                    }
+                    peerConnection.current.addTrack(track, stream);
                 });
 
-                // Evento: Quando o outro par adiciona o vídeo dele, recebemos aqui
                 peerConnection.current.ontrack = (event) => {
-                    console.log('Stream remoto recebido!');
-                    setRemoteStream(event.streams[0]);
+                    console.log('📡 Stream remoto recebido!');
+                    if (isMounted) setRemoteStream(event.streams[0]);
                 };
 
-                // Evento: Quando encontramos uma rota de rede (ICE Candidate), enviamos via Socket
                 peerConnection.current.onicecandidate = (event) => {
                     if (event.candidate) {
-                        safeSend({
-                            type: 'new-ice-candidate',
-                            candidate: event.candidate,
-                            targetSocketId: remoteSocketId
-                        });
+                        safeSend('candidate', event.candidate);
                     }
                 };
 
-                // Se este cliente for quem iniciou a chamada, cria a Oferta
+                safeSend('ready', {});
+
                 if (isInitiator) {
-                    // Pequeno delay para garantir estabilidade
-                    timeoutId = setTimeout(async () => {
-                        if (!peerConnection.current || isCanceled) return;
-                        try {
-                            console.log('Criando oferta WebRTC...');
-                            const offer = await peerConnection.current.createOffer();
-                            await peerConnection.current.setLocalDescription(offer);
-                            safeSend({
-                                type: 'video-offer',
-                                sdp: offer,
-                                targetSocketId: remoteSocketId
-                            });
-                        } catch (err) {
-                            console.error('Erro ao criar oferta:', err);
-                        }
-                    }, 1000);
+                    createAndSendOffer();
                 }
 
             } catch (err) {
-                if (!isCanceled) {
-                    console.error("Erro ao acessar mídia:", err);
-                }
+                console.error("❌ Erro WebRTC/Mídia:", err);
             }
+        };
+
+        const createAndSendOffer = async () => {
+            if (!peerConnection.current) return;
+            console.log('🚀 Criando oferta WebRTC...');
+            try {
+                const offer = await peerConnection.current.createOffer();
+                await peerConnection.current.setLocalDescription(offer);
+                safeSend('offer', offer);
+            } catch (err) { console.error(err); }
         };
 
         startConnection();
 
-        // Limpeza ao desmontar
+        // CLEANUP
         return () => {
-            isCanceled = true;
-            if (timeoutId) clearTimeout(timeoutId);
+            isMounted = false;
+            
+            // Só enviamos HANGUP se NÃO estivermos apenas reiniciando internamente
+            if (!isRestarting.current) {
+                console.log("📴 Encerrando chamada localmente (Componente desmontado)...");
+                safeSend('hangup', {});
+            } else {
+                console.log("🔄 Reiniciando conexão local (Sem enviar hangup)...");
+            }
 
             if (peerConnection.current) {
-                console.log('Fechando conexão PeerConnection');
                 peerConnection.current.close();
                 peerConnection.current = null;
             }
-
-            // Parar tracks locais (usando a variável local myStream)
             if (myStream) {
-                console.log('Parando tracks locais');
                 myStream.getTracks().forEach(track => track.stop());
             }
+            setLocalStream(null);
+            setRemoteStream(null);
         };
-    }, [remoteSocketId, isInitiator]);
+    }, [targetUserId, isInitiator, restartCount]); // Dependência restartCount recria a conexão
 
-    // 2. Escutar eventos do Socket (Sinalização)
+
+    // Listener de Socket
     useEffect(() => {
-        const handleSocketMessage = async (dataRaw) => {
+        const handleSocketMessage = async (rawMessage) => {
             try {
-                const packet = JSON.parse(dataRaw);
-
+                const packet = JSON.parse(rawMessage);
                 if (packet.status !== 'signal') return;
-                const data = packet.signalData
+
+                const body = packet.body || {}; 
+                const { type, data } = body;
+
+                if (type === 'hangup') {
+                    console.log("📴 Usuário remoto desligou. Mantendo tela ativa e aguardando retorno...");
+                    
+                    // Em vez de fechar a UI, marcamos para reiniciar a conexão WebRTC
+                    isRestarting.current = true;
+                    setRestartCount(prev => prev + 1); // Isso dispara o useEffect acima novamente
+                    return;
+                }
 
                 if (!peerConnection.current) return;
 
-                // Recebeu uma Oferta de vídeo (Lado B)
-                if (data.type === 'video-offer') {
-                    console.log('Recebida oferta de vídeo');
-                    await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    const answer = await peerConnection.current.createAnswer();
-                    await peerConnection.current.setLocalDescription(answer);
-
-                    safeSend({
-                        type: 'video-answer',
-                        sdp: answer,
-                        targetSocketId: data.sourceSocketId
-                    });
-                }
-
-                // Recebeu uma Resposta da oferta (Lado A)
-                if (data.type === 'video-answer') {
-                    console.log('Recebida resposta de vídeo');
-                    await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data.answer));
-                }
-
-                // Recebeu candidatos de rede para conexão (Ambos os lados)
-                if (data.type === 'new-ice-candidate') {
-                    try {
-                        await peerConnection.current.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    } catch (e) {
-                        console.error('Erro ao adicionar ICE candidate', e);
+                if (type === 'ready') {
+                    if (isInitiator) {
+                        console.log('👋 O outro usuário voltou/está pronto. Enviando oferta...');
+                        const offer = await peerConnection.current.createOffer();
+                        await peerConnection.current.setLocalDescription(offer);
+                        safeSend('offer', offer);
                     }
                 }
+                else if (type === 'offer') {
+                    if (!isInitiator) { 
+                        console.log('📩 Aceitando Oferta...');
+                        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data));
+                        const answer = await peerConnection.current.createAnswer();
+                        await peerConnection.current.setLocalDescription(answer);
+                        safeSend('answer', answer);
+                    }
+                } 
+                else if (type === 'answer') {
+                    console.log('📩 Resposta recebida. Conectando...');
+                    if (peerConnection.current.signalingState === 'have-local-offer') {
+                        await peerConnection.current.setRemoteDescription(new RTCSessionDescription(data));
+                    }
+                } 
+                else if (type === 'candidate') {
+                    try {
+                        await peerConnection.current.addIceCandidate(new RTCIceCandidate(data));
+                    } catch (e) { }
+                }
+
             } catch (err) {
-                console.error("Erro ao processar mensagem do socket:", err);
+                console.error("Erro socket message:", err);
             }
         };
 
-        // Adicione o listener no seu objeto socket real
         socketService.on('data', handleSocketMessage);
+        return () => { socketService.off('data', handleSocketMessage); };
+    }, [targetUserId, isInitiator]); 
 
-        return () => {
-            socketService.off('data', handleSocketMessage);
-        };
-    }, []);
-
-    // 3. Função para trocar o dispositivo de áudio (Microfone)
     const switchAudioInput = async (deviceId) => {
         try {
-            console.log('Trocando microfone para:', deviceId);
-            // 1. Pede apenas o áudio do novo dispositivo
+            if (!localStream) return;
             const audioStream = await navigator.mediaDevices.getUserMedia({
                 audio: { deviceId: { exact: deviceId } },
                 video: false
             });
             const newAudioTrack = audioStream.getAudioTracks()[0];
+            const videoTrack = localStream.getVideoTracks()[0];
+            const newStream = new MediaStream([videoTrack, newAudioTrack]);
+            setLocalStream(newStream);
 
-            // 2. Atualiza o stream local (mantendo o vídeo atual)
-            if (localStream) {
-                const oldAudioTrack = localStream.getAudioTracks()[0];
-                if (oldAudioTrack) {
-                    oldAudioTrack.stop(); // Para o mic anterior
-                }
-
-                const videoTrack = localStream.getVideoTracks()[0];
-                // Cria um novo MediaStream combinando o vídeo antigo com o novo áudio
-                const newStream = new MediaStream([videoTrack, newAudioTrack]);
-                setLocalStream(newStream);
-
-                // 3. Atualiza a conexão PeerConnection (se existir)
-                if (peerConnection.current) {
-                    const sender = peerConnection.current.getSenders().find(s => s.track && s.track.kind === 'audio');
-                    if (sender) {
-                        sender.replaceTrack(newAudioTrack);
-                    } else {
-                        // Se não tinha sender de áudio, adiciona (caso raro se iniciou mudo)
-                        peerConnection.current.addTrack(newAudioTrack, newStream);
-                    }
-                }
+            if (peerConnection.current) {
+                const sender = peerConnection.current.getSenders().find(s => s.track.kind === 'audio');
+                if (sender) sender.replaceTrack(newAudioTrack);
             }
-        } catch (err) {
-            console.error("Erro ao trocar dispositivo de áudio:", err);
-        }
+        } catch (e) { console.error(e); }
     };
 
     return { localStream, remoteStream, switchAudioInput };

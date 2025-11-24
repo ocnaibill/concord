@@ -11,9 +11,10 @@ wss.on('connection', (ws, req) => {
     const user = new User(ws, req);
     userManager.addUser(user); 
 
-    console.log(`[CONNECTION] Nova conexão: ${user.nickname}`);
+    console.log(`[CONNECTION] Nova conexão: ${user.nickname} (ID: ${user.id})`);
     
     lobbyInstance.addUser(user);
+    // Envia o ID do usuário logo na conexão para o frontend saber quem é "ele mesmo"
     user.respond('connected', { msg: 'Bem-vindo ao Chat WebSocket!', userId: user.id });
 
     ws.on('message', (rawMessage) => {
@@ -21,21 +22,47 @@ wss.on('connection', (ws, req) => {
             const packet = JSON.parse(rawMessage);
             const { command, payload } = packet;
 
-            // No seu servidor WebSocket (Node.js)
-            // Pega o canal atual do usuário (Lobby ou alguma Sala)
+            if (command === 'signal') {
+                const { targetId, type, data } = payload;
+                
+                const targetUser = userManager.getUser ? userManager.getUser(targetId) : (userManager.users.get(targetId) || userManager.users[targetId]);
+
+                if (targetUser) {
+                    console.log(`[SIGNAL] Repassando ${type} de ${user.nickname} -> ${targetUser.nickname}`);
+                    
+                    const signalPacket = JSON.stringify({
+                        status: 'signal',
+                        body: {
+                            type: type,
+                            data: data,
+                            senderId: user.id, 
+                            targetId: targetId
+                        }
+                    });
+
+                    if (targetUser.ws && targetUser.ws.readyState === 1) {
+                        targetUser.ws.send(signalPacket);
+                    } else if (targetUser.send) {
+                        targetUser.send(signalPacket);
+                    }
+                } else {
+                    console.warn(`[SIGNAL] Falha: Usuário alvo ${targetId} não encontrado.`);
+                }
+                return; 
+            }
+
+
             const channel = user.currentChannel;
 
             if (channel) {
                 channel.handleMessage(user, command, payload || {});
             } else {
-                // Caso raro onde usuário ficou órfão
                 lobbyInstance.addUser(user);
                 user.respond('error', { msg: 'Estado recuperado. Você voltou ao lobby.' });
             }
 
         } catch (err) {
             console.error('Pacote inválido:', err.message);
-            user.respond('error', { msg: 'JSON inválido' });
         }
     });
 
@@ -44,10 +71,7 @@ wss.on('connection', (ws, req) => {
 
         userManager.removeUser(user.id);
         if (user.currentChannel) {
-            // Chama lógica de saída (broadcasts, destruição de sala, etc)
-            // Se for Lobby, apenas remove. Se for Sala, pode disparar 'leave'.
             if (user.currentChannel.commands['leave']) {
-                // Simula comando de leave para limpar
                  try {
                     user.currentChannel.commands['leave']({ user });
                  } catch(e) {} 
