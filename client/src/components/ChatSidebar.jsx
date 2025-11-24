@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import peopleIcon from "../assets/people.svg";
 import globeIcon from "../assets/globe.svg";
+import socketService from "../services/socketService.js"; // Importar o serviço de socket
 
 // --- ÍCONES E ASSETS ---
 
@@ -22,7 +23,6 @@ function LeaveIcon({ className = "w-5 h-5" }) {
   );
 }
 
-// Ícone de Lupa (Search)
 function SearchIcon({ className = "w-5 h-5" }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -32,7 +32,6 @@ function SearchIcon({ className = "w-5 h-5" }) {
   );
 }
 
-// Ícone de Fechar (X)
 function CloseIcon({ className = "w-5 h-5" }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -59,6 +58,7 @@ function CameraIcon({ isOn, className = "w-6 h-6" }) {
 
 const SignalIcon = ({ quality, className }) => {
     const bars = [1, 2, 3, 4];
+    // quality: 1 (Bom/Verde), 2 (Médio/Amarelo), 3 (Ruim/Vermelho)
     const activeBars = quality === 1 ? 4 : quality === 2 ? 3 : 2;
     const color = quality === 1 ? '#00ff5e' : quality === 2 ? '#ffdd00' : '#ff3b30';
 
@@ -83,15 +83,59 @@ const SignalIcon = ({ quality, className }) => {
 const ConnectionStatusPanel = ({ user, onCameraToggle, isVideoEnabled }) => {
     const [isHoveringPing, setIsHoveringPing] = useState(false);
     const [seconds, setSeconds] = useState(0);
+    const [pingMs, setPingMs] = useState(0);
+    
+    // Estado de qualidade baseado no ping
+    // 1: < 80ms, 2: < 150ms, 3: > 150ms
+    const connectionQuality = pingMs < 80 ? 1 : pingMs < 150 ? 2 : 3;
 
-    const connectionQuality = 1; 
-    const pingMs = 34;
-
+    // 1. Timer de Conexão
     useEffect(() => {
         const interval = setInterval(() => {
             setSeconds(s => s + 1);
         }, 1000);
         return () => clearInterval(interval);
+    }, []);
+
+    // 2. Lógica de PING REAL
+    useEffect(() => {
+        let pingInterval;
+
+        const measurePing = () => {
+            if (socketService.isConnected) {
+                const start = Date.now();
+                // Envia pacote de ping com timestamp atual
+                socketService.send(JSON.stringify({
+                    command: 'ping',
+                    payload: { timestamp: start }
+                }));
+            }
+        };
+
+        const handlePong = (dataRaw) => {
+            try {
+                const packet = JSON.parse(dataRaw);
+                // Servidor responde com status: 'pong' e o mesmo timestamp
+                if (packet.status === 'pong') {
+                    const end = Date.now();
+                    const start = packet.body.timestamp;
+                    const latency = end - start;
+                    setPingMs(latency);
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        // Registra o listener
+        socketService.on('data', handlePong);
+
+        // Começa a medir a cada 2 segundos
+        measurePing(); // Primeira medição imediata
+        pingInterval = setInterval(measurePing, 2000);
+
+        return () => {
+            clearInterval(pingInterval);
+            socketService.off('data', handlePong);
+        };
     }, []);
 
     const formatTime = (totalSeconds) => {
@@ -222,7 +266,6 @@ const ChatSidebar = ({
 
   const itemsToShow = sidebarMode === 'rooms' ? roomItems : userItems;
   
-  // --- FILTRO DE BUSCA ---
   const filteredItems = useMemo(() => {
       if (!searchTerm) return itemsToShow;
       return itemsToShow.filter(item => 
@@ -240,7 +283,6 @@ const ChatSidebar = ({
       return onlineUsers.find(u => u.id === currentDmUserId);
   }, [currentDmUserId, onlineUsers]);
 
-  // Reseta a busca ao trocar de modo
   useEffect(() => {
       setIsSearchOpen(false);
       setSearchTerm("");
@@ -258,7 +300,6 @@ const ChatSidebar = ({
         </svg>
       </div>
 
-      {/* Botão Alternador (Toggle) */}
       <button
         onClick={onToggleSidebar}
         className="relative z-10 mt-[22px] ml-[13px] flex h-[32px] w-[calc(100%-25px)] items-center justify-center gap-2 rounded-[25px] bg-[#676767] text-[20px] font-bold text-white transition hover:bg-[#5a5a5a]"
@@ -268,11 +309,8 @@ const ChatSidebar = ({
         <img src={ToggleIcon} alt="" className="h-6 w-6" />
       </button>
 
-      {/* --- HEADER COM BUSCA --- */}
       <div className="relative z-10 flex items-center justify-between px-5 py-4 border-b border-white/15 min-h-[70px]">
-        
         {isSearchOpen ? (
-            // --- MODO DE BUSCA ---
             <div className="flex items-center w-full gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
                 <SearchIcon className="w-5 h-5 text-gray-400" />
                 <input 
@@ -291,14 +329,11 @@ const ChatSidebar = ({
                 </button>
             </div>
         ) : (
-            // --- MODO TÍTULO ---
             <>
                 <div className="flex items-center gap-3 group">
                     <h2 className="text-3xl font-extrabold tracking-tight">
                         {isRoomsMode ? "Chats" : "Online"}
                     </h2>
-                    
-                    {/* Botão de Lupa */}
                     <button 
                         onClick={() => setIsSearchOpen(true)}
                         className="text-gray-500 group-hover:text-white transition-colors duration-200 p-1.5 rounded-full hover:bg-white/5"
@@ -320,7 +355,6 @@ const ChatSidebar = ({
         )}
       </div>
 
-      {/* Lista de Chats ou Usuários */}
       <div className="relative z-10 flex-1 space-y-2 overflow-y-auto p-2">
         {!hasItems && (
           <div className="px-3 py-2 text-sm text-slate-400 text-center mt-4">
@@ -375,8 +409,6 @@ const ChatSidebar = ({
         })}
       </div>
 
-      {/* --- FOOTER --- */}
-      
       {isInRoom && isRoomsMode && (
         <div className="relative z-10 p-2 border-t border-white/15">
           <button
