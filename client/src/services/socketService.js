@@ -1,5 +1,3 @@
-// client/src/services/socketService.js
-
 class SocketService {
     constructor() {
         this.socket = null;
@@ -7,10 +5,29 @@ class SocketService {
         this.isConnected = false;
     }
 
-    connect(url = 'ws://localhost:3000') {
+    connect() {
         if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
             console.log('WebSocket já está conectado ou conectando.');
             return;
+        }
+
+        // --- LÓGICA DE URL ---
+        let url;
+        
+        // Verifica se estamos rodando localmente (localhost ou IP de rede)
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        if (isLocal) {
+            // Desenvolvimento Local
+            url = 'ws://localhost:3000';
+        } else {
+            // Produção (Seu Homelab)
+            // Usa o protocolo seguro (wss://) automaticamente se a página for https://
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host; // 'concord.tadalafila.dedyn.io'
+            
+            // Aponta para o caminho /ws configurado no Nginx
+            url = `${protocol}//${host}/ws`;
         }
 
         console.log(`Conectando ao WebSocket em ${url}...`);
@@ -55,11 +72,8 @@ class SocketService {
         }
     }
 
-    // Gerenciamento de Eventos (Padrão Observer simples)
     on(event, callback) {
-        if (!this.listeners[event]) {
-            this.listeners[event] = [];
-        }
+        if (!this.listeners[event]) this.listeners[event] = [];
         this.listeners[event].push(callback);
     }
 
