@@ -3,7 +3,14 @@ import socketService from './services/socketService.js';
 
 const configuration = {
     iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' } // Servidor STUN público do Google para resolver IPs
+        { 
+            urls: [
+                'stun:stun1.l.google.com:19302',
+                'stun:stun2.l.google.com:19302',
+                'stun:stun3.l.google.com:19302',
+                'stun:stun4.l.google.com:19302'
+            ] 
+        }
     ] 
 };
 
@@ -53,6 +60,14 @@ export const useWebRTC = (targetUserId, isInitiator = false) => {
 
                 peerConnection.current = new RTCPeerConnection(configuration);
 
+                // Debug de Estado da Conexão
+                peerConnection.current.onconnectionstatechange = () => {
+                    console.log("📡 Estado da Conexão:", peerConnection.current.connectionState);
+                };
+                peerConnection.current.oniceconnectionstatechange = () => {
+                    console.log("❄️ Estado ICE:", peerConnection.current.iceConnectionState);
+                };
+
                 stream.getTracks().forEach(track => {
                     peerConnection.current.addTrack(track, stream);
                 });
@@ -68,6 +83,7 @@ export const useWebRTC = (targetUserId, isInitiator = false) => {
                     }
                 };
 
+                // Avisa que estamos prontos
                 safeSend('ready', {});
 
                 if (isInitiator) {
@@ -95,12 +111,11 @@ export const useWebRTC = (targetUserId, isInitiator = false) => {
         return () => {
             isMounted = false;
             
-            // Só enviamos HANGUP se NÃO estivermos apenas reiniciando internamente
             if (!isRestarting.current) {
-                console.log("📴 Encerrando chamada localmente (Componente desmontado)...");
+                console.log("📴 Encerrando chamada localmente...");
                 safeSend('hangup', {});
             } else {
-                console.log("🔄 Reiniciando conexão local (Sem enviar hangup)...");
+                console.log("🔄 Reiniciando conexão local...");
             }
 
             if (peerConnection.current) {
@@ -113,7 +128,7 @@ export const useWebRTC = (targetUserId, isInitiator = false) => {
             setLocalStream(null);
             setRemoteStream(null);
         };
-    }, [targetUserId, isInitiator, restartCount]); // Dependência restartCount recria a conexão
+    }, [targetUserId, isInitiator, restartCount]); 
 
 
     // Listener de Socket
@@ -127,11 +142,9 @@ export const useWebRTC = (targetUserId, isInitiator = false) => {
                 const { type, data } = body;
 
                 if (type === 'hangup') {
-                    console.log("📴 Usuário remoto desligou. Mantendo tela ativa e aguardando retorno...");
-                    
-                    // Em vez de fechar a UI, marcamos para reiniciar a conexão WebRTC
+                    console.log("📴 Usuário remoto desligou. Aguardando retorno...");
                     isRestarting.current = true;
-                    setRestartCount(prev => prev + 1); // Isso dispara o useEffect acima novamente
+                    setRestartCount(prev => prev + 1);
                     return;
                 }
 
@@ -139,7 +152,7 @@ export const useWebRTC = (targetUserId, isInitiator = false) => {
 
                 if (type === 'ready') {
                     if (isInitiator) {
-                        console.log('👋 O outro usuário voltou/está pronto. Enviando oferta...');
+                        console.log('👋 O outro usuário está pronto. Enviando oferta...');
                         const offer = await peerConnection.current.createOffer();
                         await peerConnection.current.setLocalDescription(offer);
                         safeSend('offer', offer);

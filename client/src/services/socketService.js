@@ -11,23 +11,31 @@ class SocketService {
             return;
         }
 
-        // --- LÓGICA DE URL ---
         let url;
-        
-        // Verifica se estamos rodando localmente (localhost ou IP de rede)
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-        if (isLocal) {
-            // Desenvolvimento Local
-            url = 'ws://localhost:3000';
-        } else {
-            // Produção (Seu Homelab)
-            // Usa o protocolo seguro (wss://) automaticamente se a página for https://
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host; // 'concord.tadalafila.dedyn.io'
-            
-            // Aponta para o caminho /ws configurado no Nginx
-            url = `${protocol}//${host}/ws`;
+        // 1. Prioridade: Variável de Ambiente (Para Build de Produção do Electron)
+        // Isso é injetado quando rodamos "npm run dist:..."
+        if (import.meta.env.VITE_WS_URL) {
+            url = import.meta.env.VITE_WS_URL;
+        } 
+        else {
+            // 2. Detecção Automática (Para Web/Navegador ou Dev Local)
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+
+            // Se for localhost ou se for arquivo local (Electron em dev sem variável)
+            const isLocal = hostname === 'localhost' || hostname === '127.0.0.1';
+            const isFile = protocol === 'file:' || protocol === 'app:';
+
+            if (isLocal || isFile) {
+                url = 'ws://localhost:3000'; // Fallback Local
+            } else {
+                // Produção Web (Seu Homelab via Nginx)
+                // Se o site for HTTPS, usa WSS automaticamente
+                const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+                // Aponta para /ws que configuramos no Nginx
+                url = `${wsProtocol}//${window.location.host}/ws`;
+            }
         }
 
         console.log(`Conectando ao WebSocket em ${url}...`);
