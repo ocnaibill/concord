@@ -10,35 +10,49 @@ jobs:
     runs-on: self-hosted
     
     steps:
-      # 1. Baixa o código mais recente do GitHub para o servidor
+      # 1. O Runner baixa o código na pasta isolada dele
       - name: Checar Código
         uses: actions/checkout@v3
         with:
           clean: false 
 
-      # 2. Prepara o ambiente Node.js
+      # 2. Configura Node.js no ambiente do Runner
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      # 3. Instala dependências do Servidor (Backend)
-      - name: Instalar Deps do Servidor
+      # 3. Instala dependências (No ambiente do Runner)
+      - name: Instalar Dependências
         run: |
-          cd server
           npm install
 
-      # 4. Constrói o Site (Frontend)
-      # É AQUI que a pasta 'dist' é recriada automaticamente!
-      - name: Buildar Cliente (React)
+      # 4. Gera o Build do React (No ambiente do Runner)
+      # Isso cria a pasta 'dist' com a versão nova do site
+      - name: Buildar Frontend
         run: |
-          cd client
-          npm install
           npm run build:react
 
-      # 5. Reinicia o Servidor WebSocket
+      # --- PASSO CRÍTICO: DEPLOY REAL ---
+      # 5. Copia os arquivos gerados do Runner para a pasta que o Nginx/PM2 usam
+      - name: Deploy para Pasta de Produção
+        run: |
+          # Usa rsync para sincronizar os arquivos
+          # -a: modo arquivo (preserva permissões)
+          # -v: verbose (mostra o que está fazendo)
+          # --exclude: não copia a pasta .git, node_modules ou .github
+          rsync -av --progress . /home/ocnaibill/concord --exclude .git --exclude node_modules --exclude .github
+
+          # Entra na pasta de produção e garante que as dependências do backend estejam lá
+          cd /home/ocnaibill/concord
+          npm install --production
+
+      # 6. Reinicia o Servidor Backend
       - name: Reiniciar Backend (PM2)
         run: |
-          # Tenta reiniciar. Se não existir, inicia do zero.
-          pm2 restart concord-server || pm2 start server/main.js --name concord-server
+          # Reinicia o processo PM2 pelo nome
+          # Se falhar (processo não existe), inicia ele do zero apontando para o arquivo correto
+          pm2 restart concord-server || pm2 start /home/ocnaibill/concord/server/main.js --name concord-server
+          
+          # Salva a lista para garantir que volte se o servidor reiniciar
           pm2 save
