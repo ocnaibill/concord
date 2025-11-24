@@ -1,0 +1,44 @@
+name: Deploy Homelab
+
+on:
+  push:
+    branches:
+      - "tests/internet"
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    
+    steps:
+      # 1. Baixa o código mais recente do GitHub para o servidor
+      - name: Checar Código
+        uses: actions/checkout@v3
+        with:
+          clean: false 
+
+      # 2. Prepara o ambiente Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # 3. Instala dependências do Servidor (Backend)
+      - name: Instalar Deps do Servidor
+        run: |
+          cd server
+          npm install
+
+      # 4. Constrói o Site (Frontend)
+      # É AQUI que a pasta 'dist' é recriada automaticamente!
+      - name: Buildar Cliente (React)
+        run: |
+          cd client
+          npm install
+          npm run build
+
+      # 5. Reinicia o Servidor WebSocket
+      - name: Reiniciar Backend (PM2)
+        run: |
+          # Tenta reiniciar. Se não existir, inicia do zero.
+          pm2 restart concord-server || pm2 start server/main.js --name concord-server
+          pm2 save
