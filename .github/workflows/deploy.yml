@@ -34,7 +34,7 @@ jobs:
         run: |
           cd client
           npm install
-          npm run build
+          npm run build:react
 
       # 5. Reinicia o Servidor WebSocket
       - name: Reiniciar Backend (PM2)
