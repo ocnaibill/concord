@@ -14,7 +14,6 @@ wss.on('connection', (ws, req) => {
     console.log(`[CONNECTION] Nova conexão: ${user.nickname} (ID: ${user.id})`);
     
     lobbyInstance.addUser(user);
-    // Envia o ID do usuário logo na conexão para o frontend saber quem é "ele mesmo"
     user.respond('connected', { msg: 'Bem-vindo ao Chat WebSocket!', userId: user.id });
 
     ws.on('message', (rawMessage) => {
@@ -22,20 +21,26 @@ wss.on('connection', (ws, req) => {
             const packet = JSON.parse(rawMessage);
             const { command, payload } = packet;
 
+            // --- 1. PING/PONG (Latência) ---
+            if (command === 'ping') {
+                // Responde imediatamente devolvendo o timestamp do cliente
+                user.respond('pong', { timestamp: payload.timestamp });
+                return;
+            }
+
+            // --- 2. SINALIZAÇÃO WEBRTC ---
             if (command === 'signal') {
                 const { targetId, type, data } = payload;
-                
                 const targetUser = userManager.getUser ? userManager.getUser(targetId) : (userManager.users.get(targetId) || userManager.users[targetId]);
 
                 if (targetUser) {
-                    console.log(`[SIGNAL] Repassando ${type} de ${user.nickname} -> ${targetUser.nickname}`);
-                    
+                    // console.log(`[SIGNAL] Repassando ${type} de ${user.nickname} -> ${targetUser.nickname}`);
                     const signalPacket = JSON.stringify({
                         status: 'signal',
                         body: {
                             type: type,
                             data: data,
-                            senderId: user.id, 
+                            senderId: user.id,
                             targetId: targetId
                         }
                     });
@@ -45,13 +50,11 @@ wss.on('connection', (ws, req) => {
                     } else if (targetUser.send) {
                         targetUser.send(signalPacket);
                     }
-                } else {
-                    console.warn(`[SIGNAL] Falha: Usuário alvo ${targetId} não encontrado.`);
                 }
                 return; 
             }
 
-
+            // --- 3. COMANDOS DE CHAT (Lobby/Sala) ---
             const channel = user.currentChannel;
 
             if (channel) {
@@ -68,7 +71,6 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', () => {
         console.log(`[DISCONNECT] ${user.nickname} saiu.`);
-
         userManager.removeUser(user.id);
         if (user.currentChannel) {
             if (user.currentChannel.commands['leave']) {
