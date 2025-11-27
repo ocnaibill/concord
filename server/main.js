@@ -7,8 +7,7 @@ const wss = new WebSocketServer({ port: 3000 });
 
 console.log('[SERVER] WebSocket rodando na porta 3000');
 
-// Função para manter a conexão viva (Heartbeat)
-// Isso ajuda a evitar desconexões silenciosas por inatividade
+// Função heartbeat para manter conexões ativas
 function heartbeat() {
   this.isAlive = true;
 }
@@ -26,12 +25,11 @@ wss.on('connection', (ws, req) => {
     lobbyInstance.addUser(user);
     user.respond('connected', { msg: 'Bem-vindo ao Chat WebSocket!', userId: user.id });
 
-    // --- TRATAMENTO DE ERRO (CRÍTICO) ---
-    // Isso impede que o servidor crashe se o cliente desconectar abruptamente (ECONNRESET)
+    // --- TRATAMENTO DE ERRO DO CLIENTE ---
+    // Impede crash por desconexão abrupta (ECONNRESET) de um usuário específico
     ws.on('error', (error) => {
+        // Apenas loga o erro, não derruba o servidor
         console.error(`[SOCKET ERROR] Erro na conexão de ${user.nickname || 'Guest'}:`, error.message);
-        // Não precisamos fazer nada aqui, o evento 'close' será chamado em seguida
-        // O importante é ter este listener para o Node não lançar "Unhandled Exception"
     });
 
     ws.on('message', (rawMessage) => {
@@ -61,8 +59,8 @@ wss.on('connection', (ws, req) => {
                         }
                     });
 
-                    // Verifica se o socket do alvo ainda está aberto antes de enviar
-                    if (targetUser.ws && targetUser.ws.readyState === 1) { // 1 = OPEN
+                    // Verifica se o socket ainda está aberto antes de enviar
+                    if (targetUser.ws && targetUser.ws.readyState === 1) { 
                         targetUser.ws.send(signalPacket);
                     } else if (targetUser.send) {
                         targetUser.send(signalPacket);
@@ -71,7 +69,7 @@ wss.on('connection', (ws, req) => {
                 return; 
             }
 
-            // --- 3. COMANDOS DE CHAT (Lobby/Sala) ---
+            // --- 3. COMANDOS DE CHAT ---
             const channel = user.currentChannel;
 
             if (channel) {
@@ -101,7 +99,7 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// Intervalo para verificar conexões mortas a cada 30 segundos
+// Limpeza de conexões mortas a cada 30s
 const interval = setInterval(function ping() {
   wss.clients.forEach(function each(ws) {
     if (ws.isAlive === false) return ws.terminate();
@@ -115,4 +113,7 @@ wss.on('close', function close() {
   clearInterval(interval);
 });
 
-ws.on('error', console.error); // Handler global para o servidor
+// Tratamento de erro do SERVIDOR (wss), não do cliente individual
+wss.on('error', (error) => {
+    console.error('[SERVER ERROR] Erro fatal no servidor WebSocket:', error);
+});
