@@ -7,7 +7,17 @@ const wss = new WebSocketServer({ port: 3000 });
 
 console.log('[SERVER] WebSocket rodando na porta 3000');
 
+// Função para manter a conexão viva (Heartbeat)
+// Isso ajuda a evitar desconexões silenciosas por inatividade
+function heartbeat() {
+  this.isAlive = true;
+}
+
 wss.on('connection', (ws, req) => {
+    // Configura heartbeat
+    ws.isAlive = true;
+    ws.on('pong', heartbeat);
+
     const user = new User(ws, req);
     userManager.addUser(user); 
 
@@ -16,6 +26,14 @@ wss.on('connection', (ws, req) => {
     lobbyInstance.addUser(user);
     user.respond('connected', { msg: 'Bem-vindo ao Chat WebSocket!', userId: user.id });
 
+    // --- TRATAMENTO DE ERRO (CRÍTICO) ---
+    // Isso impede que o servidor crashe se o cliente desconectar abruptamente (ECONNRESET)
+    ws.on('error', (error) => {
+        console.error(`[SOCKET ERROR] Erro na conexão de ${user.nickname || 'Guest'}:`, error.message);
+        // Não precisamos fazer nada aqui, o evento 'close' será chamado em seguida
+        // O importante é ter este listener para o Node não lançar "Unhandled Exception"
+    });
+
     ws.on('message', (rawMessage) => {
         try {
             const packet = JSON.parse(rawMessage);
@@ -23,7 +41,6 @@ wss.on('connection', (ws, req) => {
 
             // --- 1. PING/PONG (Latência) ---
             if (command === 'ping') {
-                // Responde imediatamente devolvendo o timestamp do cliente
                 user.respond('pong', { timestamp: payload.timestamp });
                 return;
             }
@@ -34,7 +51,6 @@ wss.on('connection', (ws, req) => {
                 const targetUser = userManager.getUser ? userManager.getUser(targetId) : (userManager.users.get(targetId) || userManager.users[targetId]);
 
                 if (targetUser) {
-                    // console.log(`[SIGNAL] Repassando ${type} de ${user.nickname} -> ${targetUser.nickname}`);
                     const signalPacket = JSON.stringify({
                         status: 'signal',
                         body: {
@@ -45,7 +61,8 @@ wss.on('connection', (ws, req) => {
                         }
                     });
 
-                    if (targetUser.ws && targetUser.ws.readyState === 1) {
+                    // Verifica se o socket do alvo ainda está aberto antes de enviar
+                    if (targetUser.ws && targetUser.ws.readyState === 1) { // 1 = OPEN
                         targetUser.ws.send(signalPacket);
                     } else if (targetUser.send) {
                         targetUser.send(signalPacket);
@@ -82,6 +99,20 @@ wss.on('connection', (ws, req) => {
             }
         }
     });
-    
-    ws.on('error', console.error);
 });
+
+// Intervalo para verificar conexões mortas a cada 30 segundos
+const interval = setInterval(function ping() {
+  wss.clients.forEach(function each(ws) {
+    if (ws.isAlive === false) return ws.terminate();
+
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on('close', function close() {
+  clearInterval(interval);
+});
+
+ws.on('error', console.error); // Handler global para o servidor
