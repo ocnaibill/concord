@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Concord Project Flowchart</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</head>
+<body>
+    <h1>Fluxograma do Projeto Concord - Bianco Da Costa Oliveira</h1>
+    <div class="mermaid">
+sequenceDiagram
+    participant Client as Cliente (Frontend)
+    participant Socket as SocketService
+    participant Server as Servidor (Backend)
+    participant UserManager as Gerenciador de Usuários
+    participant Lobby as Lobby (Canal Padrão)
+    participant Room as Sala (Canal Privado)
+    Note over Client, Server: Conexão Inicial
+    Client->>Socket: connect()
+    Socket->>Server: WebSocket Connection
+    Server->>UserManager: addUser(user)
+    Server->>Lobby: addUser(user)
+    Server-->>Client: "connected" (Bem-vindo)
+    Note over Client, Server: Definição de Nickname
+    Client->>Socket: send("nick", { nickname: "João" })
+    Socket->>Server: Packet: { command: "nick", payload: ... }
+    Server->>UserManager: Verifica disponibilidade
+    alt Nickname Livre
+        Server-->>Client: "success" (Nick alterado)
+    else Nickname em Uso
+        Server-->>Client: "error" (Já em uso)
+    end
+    Note over Client, Server: Listagem e Criação de Salas
+    Client->>Socket: send("list", { entity: "rooms" })
+    Server->>Lobby: listRooms()
+    Lobby-->>Client: "success" (Lista de salas)
+    Client->>Socket: send("create", { roomName: "Sala 1" })
+    Server->>Room: createRoom("Sala 1")
+    Server->>Lobby: removeUser(user)
+    Server->>Room: addUser(user)
+    Server-->>Client: "success" (Entrou na sala)
+    Server-->>Client: "broadcast" (Lista de salas atualizada para todos)
+    Note over Client, Server: Troca de Mensagens (Em Sala)
+    Client->>Socket: send("message", { message: "Olá!" })
+    Server->>Room: broadcast("message", "Olá!")
+    Room-->>Client: "success" (Confirmação)
+    Room-->>Client: "broadcast" (Para outros na sala)
+    Note over Client, Server: Mensagens Diretas (DM)
+    Client->>Socket: send("dm", { targetId: "...", message: "Oi privado" })
+    Server->>UserManager: getUser(targetId)
+    Server->>Client: send("direct-message") (Para o alvo)
+    Server-->>Client: "success-dm" (Confirmação)
+    Note over Client, Server: WebRTC (Chamada de Voz/Vídeo)
+    Client->>Socket: send("signal", { targetId, type, data })
+    Server->>UserManager: getUser(targetId)
+    Server->>Client: send("signal") (Repassa dados WebRTC para o alvo)
+    </div>
+</body>
+</html>
