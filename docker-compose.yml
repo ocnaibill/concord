@@ -1,0 +1,22 @@
+# Servidor + cliente web do Concord.
+# Sem build de imagem: roda o código montado em node:22-alpine.
+# (RUN dentro do LXC falha por AppArmor; o cliente é buildado antes com `npm run build:react`.)
+services:
+  concord:
+    image: node:22-alpine
+    container_name: concord
+    working_dir: /app
+    command: node server/main.js
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    environment:
+      PORT: "3000"
+      STATIC_DIR: /app/client/dist
+    volumes:
+      - ./server:/app/server:ro
+      - ./client/dist:/app/client/dist:ro
+      - ./package.json:/app/package.json:ro
+      - ./node_modules:/app/node_modules:ro
+    ports:
+      - "3100:3000"

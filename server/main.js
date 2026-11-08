@@ -1,11 +1,40 @@
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { User } from './core/User.js';
 import { lobbyInstance } from './entities/Lobby.js';
 import { userManager } from './managers/UserManager.js';
 
-const wss = new WebSocketServer({ port: 3000 });
+const PORT = process.env.PORT || 3000;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const STATIC_DIR = path.resolve(process.env.STATIC_DIR || path.join(__dirname, '../client/dist'));
 
-console.log('[SERVER] WebSocket rodando na porta 3000');
+const MIME = {
+    '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
+    '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.ico': 'image/x-icon',
+};
+
+// Serve o cliente web (build do Vite) para quem acessa pelo navegador.
+// Se o build não existir (ex.: dev local), responde apenas 404 e o WebSocket segue funcionando.
+const httpServer = http.createServer((req, res) => {
+    const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+    if (urlPath === '/healthz') { res.writeHead(200); return res.end('ok'); }
+
+    let file = path.join(STATIC_DIR, urlPath === '/' ? 'index.html' : urlPath);
+    if (!file.startsWith(STATIC_DIR)) { res.writeHead(403); return res.end(); }
+    if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(STATIC_DIR, 'index.html');
+
+    fs.readFile(file, (err, data) => {
+        if (err) { res.writeHead(404); return res.end('Not found'); }
+        res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+        res.end(data);
+    });
+});
+
+const wss = new WebSocketServer({ server: httpServer });
+httpServer.listen(PORT, () => console.log(`[SERVER] HTTP + WebSocket rodando na porta ${PORT} (estáticos: ${STATIC_DIR})`));
 
 wss.on('connection', (ws, req) => {
     const user = new User(ws, req);
